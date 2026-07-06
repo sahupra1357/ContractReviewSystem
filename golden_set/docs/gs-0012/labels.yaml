@@ -1,0 +1,46 @@
+doc_id: gs-0012
+family: vendor-services-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Globex Maintenance Inc
+  type: ORG
+  registered: true
+- text: Cascade Property Group LLC
+  type: ORG
+  registered: true
+- text: Maria Chen
+  type: PERSON
+  registered: true
+- text: Priya Nair
+  type: PERSON
+  registered: true
+- text: 8830-1276-5544
+  type: ACCOUNT
+  registered: true
+- text: 1200 Harbor View Drive, Seattle, WA
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-04-11'
+  closing_date: '2026-10-02'
+  term_months: '36'
+  monthly_amount: USD 8,462
+  deposit_amount: USD 16,000
+  purchase_price: USD 820,000
+expected_sections:
+- 1. PARTIES
+- 2. SERVICES
+- 3. TERM
+- 4. COMPENSATION
+- 5. STANDARD OF WORK
+- 6. INSURANCE
+- 7. INDEMNIFICATION
+- 8. LIABILITY CAP
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues: []
+expected_clean: true

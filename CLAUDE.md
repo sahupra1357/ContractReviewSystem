@@ -48,17 +48,20 @@ functionality first, designed with scale (10K → millions of documents) in mind
 | UI | React SPA |
 | Graph | Postgres graph-lite; Neptune only if ≥3-hop need is proven |
 | Golden set | Synthetic contracts (OQ-2 resolved 2026-07-05): 20–30 generated contracts with planted fake PII + planted issues, labels known by construction; must plant both known-list and novel PII; real-contract validation at pre-prod |
+| Contract families | OQ-3 resolved 2026-07-06 (real-estate industry): lease agreement, property purchase agreement, vendor/property-services agreement |
 | PII gate | Deterministic-primary, fail-closed (2026-07-05, supersedes layered): PII **master table** (real table in POC + admin screen) is the only masking authority (fuzzy/OCR-tolerant matching); Presidio is a detector-only tripwire — any possible unregistered entity halts the doc in `pii_hold` for human resolution. Unknown PII never flows downstream. G3: recall ≥ 0.98 post-hold-resolution + false-alarm rate reported |
 
 ## Current status
 
-**Phase 1 (Ingestion) complete** — G0 and G1 passed (`docs/gates/`).
-Upload API (`POST /ingest/upload`, multi-file, `X-Actor-Id` header as the
-auth placeholder until Phase 6 JWT), SHA-256 dedup, document registry, job
-queue, connector interface. Next: Phase 2 (Extraction: born-digital fast
-path + OCR worker + clause structure) — needs OQ-3 (contract families)
-answered for the golden-set generator. `main.py` and `ppt_extract.py` at the
-repo root are scratch files from the analysis phase — not application code.
+**Phase 2 (Extraction) complete** — G0–G2 passed (`docs/gates/`).
+Pipeline so far: upload API → dedup/registry → extract worker (born-digital
+fast path via pypdf/python-docx, OCR via tesseract+pypdfium2, clause
+segmentation with offsets+page provenance) → `extracted.json` in the RAW
+zone. Golden set generated & frozen (22 docs, 3 families). Eval:
+`uv run python -m backend.eval.extraction_eval`. Next: Phase 3 (PII gate:
+master table + deterministic masking + Presidio fail-closed tripwire).
+`main.py` and `ppt_extract.py` at the repo root are scratch files from the
+analysis phase — not application code.
 
 ## Stack & layout
 

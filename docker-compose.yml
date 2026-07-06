@@ -77,6 +77,19 @@ services:
       timeout: 3s
       retries: 10
 
+  worker:                         # → ECS/EKS pipeline workers (SQS consumers)
+    build: ./backend
+    command: python -m backend.worker
+    environment:
+      CRS_DATABASE_URL: postgresql+psycopg://crs:crs@postgres:5432/crs
+      CRS_S3_ENDPOINT_URL: http://minio:9000
+      CRS_PRESIDIO_ANALYZER_URL: http://presidio-analyzer:3000
+      CRS_PRESIDIO_ANONYMIZER_URL: http://presidio-anonymizer:3000
+      CRS_ENVIRONMENT: compose
+    depends_on:
+      backend:                     # backend applies migrations first
+        condition: service_healthy
+
 volumes:
   pgdata:
   miniodata:

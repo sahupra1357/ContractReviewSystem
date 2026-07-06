@@ -1,0 +1,46 @@
+doc_id: gs-0004
+family: lease-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Acme Property Holdings LLC
+  type: ORG
+  registered: true
+- text: Priya Nair
+  type: PERSON
+  registered: true
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: 4471-3920-0011
+  type: ACCOUNT
+  registered: true
+- text: 88 Juniper Lane, Portland, OR
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-03-13'
+  closing_date: '2026-11-03'
+  term_months: '24'
+  monthly_amount: USD 7,314
+  deposit_amount: USD 11,000
+  purchase_price: USD 473,000
+expected_sections:
+- 1. PARTIES
+- 2. PREMISES
+- 3. TERM
+- 4. RENT
+- 5. SECURITY DEPOSIT
+- 6. MAINTENANCE
+- 8. LIABILITY
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: lease-missing-insurance
+  clause_ref: 7. INSURANCE
+  description: Insurance clause missing entirely (template requires renter's insurance)
+  severity: medium
+expected_clean: false

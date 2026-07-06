@@ -1,0 +1,51 @@
+doc_id: gs-0021
+family: vendor-services-v1
+format: scanned-pdf
+poor_scan: true
+filename: document.pdf
+pii:
+- text: Cascade Property Group LLC
+  type: ORG
+  registered: true
+- text: Bluefin Restoration Co
+  type: ORG
+  registered: false
+- text: Samuel Okafor
+  type: PERSON
+  registered: true
+- text: Tobias Lindqvist
+  type: PERSON
+  registered: false
+- text: 7719-4402-8873
+  type: ACCOUNT
+  registered: false
+- text: 47 Old Mill Road, Spokane, WA
+  type: ADDRESS
+  registered: false
+has_novel_pii: true
+key_terms:
+  effective_date: '2026-04-10'
+  closing_date: '2026-11-04'
+  term_months: '36'
+  monthly_amount: USD 2,749
+  deposit_amount: USD 3,000
+  purchase_price: USD 651,000
+expected_sections:
+- 1. PARTIES
+- 2. SERVICES
+- 3. TERM
+- 4. COMPENSATION
+- 5. STANDARD OF WORK
+- 6. INSURANCE
+- 7. INDEMNIFICATION
+- 8. LIABILITY CAP
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: vendor-unilateral-termination
+  clause_ref: 9. TERMINATION
+  description: "One-sided termination favoring Vendor \u2014 deviates from mutual\
+    \ 30-day standard"
+  severity: medium
+expected_clean: false

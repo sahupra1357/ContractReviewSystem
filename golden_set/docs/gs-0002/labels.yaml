@@ -1,0 +1,43 @@
+doc_id: gs-0002
+family: lease-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Globex Maintenance Inc
+  type: ORG
+  registered: true
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: Samuel Okafor
+  type: PERSON
+  registered: true
+- text: 4471-3920-0011
+  type: ACCOUNT
+  registered: true
+- text: 88 Juniper Lane, Portland, OR
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-02-15'
+  closing_date: '2026-11-06'
+  term_months: '24'
+  monthly_amount: USD 4,320
+  deposit_amount: USD 13,000
+  purchase_price: USD 504,000
+expected_sections:
+- 1. PARTIES
+- 2. PREMISES
+- 3. TERM
+- 4. RENT
+- 5. SECURITY DEPOSIT
+- 6. MAINTENANCE
+- 7. INSURANCE
+- 8. LIABILITY
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues: []
+expected_clean: true

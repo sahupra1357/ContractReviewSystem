@@ -304,8 +304,9 @@ and it is the right thing to be hard on.
   `golden_set/` with labels alongside each document. Real-contract validation
   (a small anonymized set labeled by legal) moves to pre-prod. Demo deck must
   state clearly that POC metrics are measured on the synthetic labeled set.
-- **OQ-3 — Contract families:** which 2–3 template families exist in the
-  100-doc corpus for the template-diff demo?
+- **OQ-3 — RESOLVED (2026-07-06):** three real-estate template families for
+  the synthetic corpus and template-diff demo: **lease agreement**,
+  **property purchase agreement**, **vendor/property-services agreement**.
 - **OQ-4 — Reviewer rubric:** what fields must a decision rationale capture
   for legal ops (free text vs structured reasons)?
 - **OQ-5 — Demo environment:** laptop vs internal VM for the C-level demo;

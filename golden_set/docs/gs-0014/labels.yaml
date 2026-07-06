@@ -1,0 +1,43 @@
+doc_id: gs-0014
+family: purchase-v1
+format: docx
+poor_scan: false
+filename: document.docx
+pii:
+- text: Acme Property Holdings LLC
+  type: ORG
+  registered: true
+- text: Tobias Lindqvist
+  type: PERSON
+  registered: false
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: 7719-4402-8873
+  type: ACCOUNT
+  registered: false
+- text: 47 Old Mill Road, Spokane, WA
+  type: ADDRESS
+  registered: false
+has_novel_pii: true
+key_terms:
+  effective_date: '2026-02-11'
+  closing_date: '2026-11-08'
+  term_months: '24'
+  monthly_amount: USD 5,985
+  deposit_amount: USD 15,000
+  purchase_price: USD 460,000
+expected_sections:
+- 1. PARTIES
+- 2. PROPERTY
+- 3. PURCHASE PRICE
+- 4. EARNEST MONEY
+- 5. CLOSING
+- 6. TITLE
+- 7. INSPECTION
+- 8. DEFAULT
+- 9. RISK OF LOSS
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues: []
+expected_clean: true

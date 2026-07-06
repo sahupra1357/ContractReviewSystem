@@ -1,0 +1,45 @@
+doc_id: gs-0001
+family: lease-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Sunrise Realty Partners LP
+  type: ORG
+  registered: true
+- text: Maria Chen
+  type: PERSON
+  registered: true
+- text: 4471-3920-0011
+  type: ACCOUNT
+  registered: true
+- text: 1200 Harbor View Drive, Seattle, WA
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-06-10'
+  closing_date: '2026-10-07'
+  term_months: '12'
+  monthly_amount: USD 2,195
+  deposit_amount: USD 9,000
+  purchase_price: USD 638,000
+expected_sections:
+- 1. PARTIES
+- 2. PREMISES
+- 3. TERM
+- 4. RENT
+- 5. SECURITY DEPOSIT
+- 6. MAINTENANCE
+- 7. INSURANCE
+- 8. LIABILITY
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: lease-uncapped-liability
+  clause_ref: 8. LIABILITY
+  description: "Uncapped landlord liability \u2014 deviates from lease-v1 12-month\
+    \ rent cap"
+  severity: high
+expected_clean: false

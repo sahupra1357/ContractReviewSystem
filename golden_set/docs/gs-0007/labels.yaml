@@ -1,0 +1,47 @@
+doc_id: gs-0007
+family: purchase-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Globex Maintenance Inc
+  type: ORG
+  registered: true
+- text: Tobias Lindqvist
+  type: PERSON
+  registered: false
+- text: Priya Nair
+  type: PERSON
+  registered: true
+- text: 7719-4402-8873
+  type: ACCOUNT
+  registered: false
+- text: 47 Old Mill Road, Spokane, WA
+  type: ADDRESS
+  registered: false
+has_novel_pii: true
+key_terms:
+  effective_date: '2026-04-13'
+  closing_date: '2026-11-09'
+  term_months: '24'
+  monthly_amount: USD 2,796
+  deposit_amount: USD 6,000
+  purchase_price: USD 949,000
+expected_sections:
+- 1. PARTIES
+- 2. PROPERTY
+- 3. PURCHASE PRICE
+- 4. EARNEST MONEY
+- 5. CLOSING
+- 6. TITLE
+- 7. INSPECTION
+- 8. DEFAULT
+- 9. RISK OF LOSS
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: purchase-inspection-waiver
+  clause_ref: 7. INSPECTION
+  description: "Inspection rights waived \u2014 deviates from 10-day inspection standard"
+  severity: medium
+expected_clean: false

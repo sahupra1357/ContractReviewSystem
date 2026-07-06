@@ -1,0 +1,43 @@
+doc_id: gs-0020
+family: purchase-v1
+format: scanned-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Cascade Property Group LLC
+  type: ORG
+  registered: true
+- text: Maria Chen
+  type: PERSON
+  registered: true
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: 4471-3920-0011
+  type: ACCOUNT
+  registered: true
+- text: 88 Juniper Lane, Portland, OR
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-03-15'
+  closing_date: '2026-10-06'
+  term_months: '12'
+  monthly_amount: USD 5,844
+  deposit_amount: USD 5,000
+  purchase_price: USD 734,000
+expected_sections:
+- 1. PARTIES
+- 2. PROPERTY
+- 3. PURCHASE PRICE
+- 4. EARNEST MONEY
+- 5. CLOSING
+- 6. TITLE
+- 7. INSPECTION
+- 8. DEFAULT
+- 9. RISK OF LOSS
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues: []
+expected_clean: true

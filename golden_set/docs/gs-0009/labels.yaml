@@ -1,0 +1,50 @@
+doc_id: gs-0009
+family: vendor-services-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Acme Property Holdings LLC
+  type: ORG
+  registered: true
+- text: Sunrise Realty Partners LP
+  type: ORG
+  registered: true
+- text: Priya Nair
+  type: PERSON
+  registered: true
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: 8830-1276-5544
+  type: ACCOUNT
+  registered: true
+- text: 1200 Harbor View Drive, Seattle, WA
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-01-12'
+  closing_date: '2026-11-04'
+  term_months: '12'
+  monthly_amount: USD 5,999
+  deposit_amount: USD 5,000
+  purchase_price: USD 487,000
+expected_sections:
+- 1. PARTIES
+- 2. SERVICES
+- 3. TERM
+- 4. COMPENSATION
+- 5. STANDARD OF WORK
+- 6. INSURANCE
+- 7. INDEMNIFICATION
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: vendor-no-liability-cap
+  clause_ref: 8. LIABILITY CAP
+  description: "Liability cap section missing \u2014 vendor-services-v1 requires mutual\
+    \ 12-month cap"
+  severity: high
+expected_clean: false

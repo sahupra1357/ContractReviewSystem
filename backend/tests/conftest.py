@@ -15,6 +15,9 @@ class FakeRawStorage:
     def put_raw(self, key: str, data: bytes, content_type: str | None) -> None:
         self.objects[key] = data
 
+    def get_raw(self, key: str) -> bytes:
+        return self.objects[key]
+
 
 @pytest.fixture()
 def session():

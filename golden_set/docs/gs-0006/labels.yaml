@@ -1,0 +1,43 @@
+doc_id: gs-0006
+family: purchase-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Cascade Property Group LLC
+  type: ORG
+  registered: true
+- text: Maria Chen
+  type: PERSON
+  registered: true
+- text: Samuel Okafor
+  type: PERSON
+  registered: true
+- text: 8830-1276-5544
+  type: ACCOUNT
+  registered: true
+- text: 88 Juniper Lane, Portland, OR
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-02-15'
+  closing_date: '2026-11-07'
+  term_months: '36'
+  monthly_amount: USD 8,470
+  deposit_amount: USD 10,000
+  purchase_price: USD 541,000
+expected_sections:
+- 1. PARTIES
+- 2. PROPERTY
+- 3. PURCHASE PRICE
+- 4. EARNEST MONEY
+- 5. CLOSING
+- 6. TITLE
+- 7. INSPECTION
+- 8. DEFAULT
+- 9. RISK OF LOSS
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues: []
+expected_clean: true

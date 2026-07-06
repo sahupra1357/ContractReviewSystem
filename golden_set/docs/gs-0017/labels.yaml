@@ -1,0 +1,46 @@
+doc_id: gs-0017
+family: lease-v1
+format: scanned-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Globex Maintenance Inc
+  type: ORG
+  registered: true
+- text: Samuel Okafor
+  type: PERSON
+  registered: true
+- text: Maria Chen
+  type: PERSON
+  registered: true
+- text: 8830-1276-5544
+  type: ACCOUNT
+  registered: true
+- text: 88 Juniper Lane, Portland, OR
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-04-11'
+  closing_date: '2026-11-08'
+  term_months: '24'
+  monthly_amount: USD 3,109
+  deposit_amount: USD 17,000
+  purchase_price: USD 502,000
+expected_sections:
+- 1. PARTIES
+- 2. PREMISES
+- 3. TERM
+- 4. RENT
+- 5. SECURITY DEPOSIT
+- 6. MAINTENANCE
+- 8. LIABILITY
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: lease-missing-insurance
+  clause_ref: 7. INSURANCE
+  description: Insurance clause missing entirely (template requires renter's insurance)
+  severity: medium
+expected_clean: false

@@ -1,0 +1,43 @@
+doc_id: gs-0018
+family: lease-v1
+format: scanned-pdf
+poor_scan: true
+filename: document.pdf
+pii:
+- text: Globex Maintenance Inc
+  type: ORG
+  registered: true
+- text: Tobias Lindqvist
+  type: PERSON
+  registered: false
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: 7719-4402-8873
+  type: ACCOUNT
+  registered: false
+- text: 47 Old Mill Road, Spokane, WA
+  type: ADDRESS
+  registered: false
+has_novel_pii: true
+key_terms:
+  effective_date: '2026-03-12'
+  closing_date: '2026-10-08'
+  term_months: '36'
+  monthly_amount: USD 6,726
+  deposit_amount: USD 19,000
+  purchase_price: USD 408,000
+expected_sections:
+- 1. PARTIES
+- 2. PREMISES
+- 3. TERM
+- 4. RENT
+- 5. SECURITY DEPOSIT
+- 6. MAINTENANCE
+- 7. INSURANCE
+- 8. LIABILITY
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues: []
+expected_clean: true

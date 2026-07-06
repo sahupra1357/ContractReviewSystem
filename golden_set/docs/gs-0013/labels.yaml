@@ -1,0 +1,48 @@
+doc_id: gs-0013
+family: lease-v1
+format: docx
+poor_scan: false
+filename: document.docx
+pii:
+- text: Acme Property Holdings LLC
+  type: ORG
+  registered: true
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: Samuel Okafor
+  type: PERSON
+  registered: true
+- text: 4471-3920-0011
+  type: ACCOUNT
+  registered: true
+- text: 1200 Harbor View Drive, Seattle, WA
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-02-11'
+  closing_date: '2026-10-09'
+  term_months: '24'
+  monthly_amount: USD 4,532
+  deposit_amount: USD 8,000
+  purchase_price: USD 685,000
+expected_sections:
+- 1. PARTIES
+- 2. PREMISES
+- 3. TERM
+- 4. RENT
+- 5. SECURITY DEPOSIT
+- 6. MAINTENANCE
+- 7. INSURANCE
+- 8. LIABILITY
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: lease-uncapped-liability
+  clause_ref: 8. LIABILITY
+  description: "Uncapped landlord liability \u2014 deviates from lease-v1 12-month\
+    \ rent cap"
+  severity: high
+expected_clean: false

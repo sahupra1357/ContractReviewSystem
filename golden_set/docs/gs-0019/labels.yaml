@@ -1,0 +1,48 @@
+doc_id: gs-0019
+family: purchase-v1
+format: scanned-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Acme Property Holdings LLC
+  type: ORG
+  registered: true
+- text: Samuel Okafor
+  type: PERSON
+  registered: true
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: 4471-3920-0011
+  type: ACCOUNT
+  registered: true
+- text: 1200 Harbor View Drive, Seattle, WA
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-02-12'
+  closing_date: '2026-11-08'
+  term_months: '36'
+  monthly_amount: USD 4,950
+  deposit_amount: USD 17,000
+  purchase_price: USD 702,000
+expected_sections:
+- 1. PARTIES
+- 2. PROPERTY
+- 3. PURCHASE PRICE
+- 4. EARNEST MONEY
+- 5. CLOSING
+- 6. TITLE
+- 7. INSPECTION
+- 8. DEFAULT
+- 9. RISK OF LOSS
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: purchase-nonrefundable-earnest
+  clause_ref: 4. EARNEST MONEY
+  description: "Earnest money non-refundable even on failed contingency \u2014 deviates\
+    \ from purchase-v1"
+  severity: high
+expected_clean: false

@@ -1,0 +1,43 @@
+doc_id: gs-0022
+family: vendor-services-v1
+format: scanned-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Globex Maintenance Inc
+  type: ORG
+  registered: true
+- text: Cascade Property Group LLC
+  type: ORG
+  registered: true
+- text: Samuel Okafor
+  type: PERSON
+  registered: true
+- text: 4471-3920-0011
+  type: ACCOUNT
+  registered: true
+- text: 88 Juniper Lane, Portland, OR
+  type: ADDRESS
+  registered: true
+has_novel_pii: false
+key_terms:
+  effective_date: '2026-02-13'
+  closing_date: '2026-10-07'
+  term_months: '36'
+  monthly_amount: USD 8,184
+  deposit_amount: USD 20,000
+  purchase_price: USD 862,000
+expected_sections:
+- 1. PARTIES
+- 2. SERVICES
+- 3. TERM
+- 4. COMPENSATION
+- 5. STANDARD OF WORK
+- 6. INSURANCE
+- 7. INDEMNIFICATION
+- 8. LIABILITY CAP
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues: []
+expected_clean: true

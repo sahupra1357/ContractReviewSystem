@@ -1,0 +1,54 @@
+doc_id: gs-0011
+family: vendor-services-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Sunrise Realty Partners LP
+  type: ORG
+  registered: true
+- text: Bluefin Restoration Co
+  type: ORG
+  registered: false
+- text: Maria Chen
+  type: PERSON
+  registered: true
+- text: Tobias Lindqvist
+  type: PERSON
+  registered: false
+- text: 7719-4402-8873
+  type: ACCOUNT
+  registered: false
+- text: 47 Old Mill Road, Spokane, WA
+  type: ADDRESS
+  registered: false
+has_novel_pii: true
+key_terms:
+  effective_date: '2026-01-10'
+  closing_date: '2026-10-04'
+  term_months: '12'
+  monthly_amount: USD 2,980
+  deposit_amount: USD 13,000
+  purchase_price: USD 472,000
+expected_sections:
+- 1. PARTIES
+- 2. SERVICES
+- 3. TERM
+- 4. COMPENSATION
+- 5. STANDARD OF WORK
+- 6. INSURANCE
+- 8. LIABILITY CAP
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: vendor-missing-indemnity
+  clause_ref: 7. INDEMNIFICATION
+  description: Indemnification clause missing (template requires vendor indemnity)
+  severity: medium
+- id: vendor-unilateral-termination
+  clause_ref: 9. TERMINATION
+  description: "One-sided termination favoring Vendor \u2014 deviates from mutual\
+    \ 30-day standard"
+  severity: medium
+expected_clean: false

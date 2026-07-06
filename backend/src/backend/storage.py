@@ -15,6 +15,8 @@ from backend.config import get_settings
 class RawStorage(Protocol):
     def put_raw(self, key: str, data: bytes, content_type: str | None) -> None: ...
 
+    def get_raw(self, key: str) -> bytes: ...
+
 
 class S3RawStorage:
     def __init__(self) -> None:
@@ -30,3 +32,7 @@ class S3RawStorage:
     def put_raw(self, key: str, data: bytes, content_type: str | None) -> None:
         extra = {"ContentType": content_type} if content_type else {}
         self._client.put_object(Bucket=self._bucket, Key=key, Body=data, **extra)
+
+    def get_raw(self, key: str) -> bytes:
+        response = self._client.get_object(Bucket=self._bucket, Key=key)
+        return response["Body"].read()

@@ -1,0 +1,48 @@
+doc_id: gs-0003
+family: lease-v1
+format: born-digital-pdf
+poor_scan: false
+filename: document.pdf
+pii:
+- text: Sunrise Realty Partners LP
+  type: ORG
+  registered: true
+- text: Amara Diallo
+  type: PERSON
+  registered: false
+- text: Jordan Rivera
+  type: PERSON
+  registered: true
+- text: 7719-4402-8873
+  type: ACCOUNT
+  registered: false
+- text: 47 Old Mill Road, Spokane, WA
+  type: ADDRESS
+  registered: false
+has_novel_pii: true
+key_terms:
+  effective_date: '2026-05-10'
+  closing_date: '2026-11-02'
+  term_months: '36'
+  monthly_amount: USD 6,949
+  deposit_amount: USD 14,000
+  purchase_price: USD 596,000
+expected_sections:
+- 1. PARTIES
+- 2. PREMISES
+- 3. TERM
+- 4. RENT
+- 5. SECURITY DEPOSIT
+- 6. MAINTENANCE
+- 7. INSURANCE
+- 8. LIABILITY
+- 9. TERMINATION
+- 10. GOVERNING LAW
+- 11. SIGNATURES
+known_issues:
+- id: lease-long-autorenew
+  clause_ref: 3. TERM
+  description: "Auto-renewal of 36 months without notice \u2014 deviates from 12-month/60-day-notice\
+    \ standard"
+  severity: medium
+expected_clean: false

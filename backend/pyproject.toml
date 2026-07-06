@@ -1,0 +1,42 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Contract Review Co-Pilot — backend API and pipeline"
+readme = "README.md"
+authors = [
+    { name = "Pradeep Sahu", email = "sahupra1357@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic",
+    "boto3",
+    "fastapi",
+    "psycopg[binary]",
+    "pydantic-settings",
+    "sqlalchemy>=2.0",
+    "uvicorn[standard]",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "httpx",
+    "pytest",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "invariant: security-invariant tests that require the compose Postgres (run with CRS_RUN_INVARIANT_TESTS=1)",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

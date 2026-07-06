@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+project_document/
+
+# Virtual environments
+.venv
+
+# Environment / secrets — never commit credentials
+.env
+.env.*
+
+# Tool caches
+.serena/
+
+# OS
+.DS_Store

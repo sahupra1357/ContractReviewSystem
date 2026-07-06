@@ -12,10 +12,21 @@ from dataclasses import dataclass
 from backend.extraction.fast_path import Page
 
 # Numbered heading on its own line: "3. TERM", "10. GOVERNING LAW", "2.1 X".
-# Title must be mostly uppercase to avoid matching numbered list items.
+# The char class admits lowercase letters because OCR mutates glyphs
+# ("LIABILITY" → "LIABILlTY" on poor scans); _is_heading_title enforces the
+# mostly-uppercase rule so numbered list items still don't match.
 _HEADING = re.compile(
-    r"^[ \t]*(\d+(?:\.\d+)*)[.)]?[ \t]+([A-Z][A-Z0-9 /&'-]{2,})[ \t]*$", re.MULTILINE
+    r"^[ \t]*(\d+(?:\.\d+)*)[.)]?[ \t]+([A-Z][A-Za-z0-9 /&'-]{2,})[ \t]*$",
+    re.MULTILINE,
 )
+_MIN_UPPER_RATIO = 0.6
+
+
+def _is_heading_title(title: str) -> bool:
+    letters = [c for c in title if c.isalpha()]
+    if not letters:
+        return False
+    return sum(c.isupper() for c in letters) / len(letters) >= _MIN_UPPER_RATIO
 
 
 @dataclass
@@ -52,7 +63,8 @@ def segment(pages: list[Page]) -> tuple[str, list[Section]]:
     """Return (full_text, sections). Text before the first heading (title,
     preamble) is section 'sec-0'."""
     full_text, page_offsets = join_pages(pages)
-    matches = list(_HEADING.finditer(full_text))
+    matches = [m for m in _HEADING.finditer(full_text)
+               if _is_heading_title(m.group(2))]
     sections: list[Section] = []
 
     if not matches:

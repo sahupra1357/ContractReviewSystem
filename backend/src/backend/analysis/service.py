@@ -39,6 +39,47 @@ def _parse_json(text: str) -> dict[str, Any]:
     return json.loads(cleaned)
 
 
+def _store_manual_review_analysis(
+    session: Session, document: Document, family_score: float,
+    chunks: list, started: float,
+) -> None:
+    first_chunk = min(chunks, key=lambda c: c.start) if chunks else None
+    findings = []
+    if first_chunk is not None:
+        findings.append({
+            "citation": first_chunk.id, "severity": "high",
+            "title": "Template family undetermined — full manual review required",
+            "description": (
+                "Too few standard section headings were recognized "
+                f"(best family score {family_score:.2f}) — typically a "
+                "degraded scan. AI analysis was NOT attempted; a reviewer "
+                "must read this contract in full."),
+        })
+    existing = session.execute(
+        select(Analysis).where(Analysis.document_id == document.id)
+    ).scalar_one_or_none()
+    if existing:
+        session.delete(existing)
+        session.flush()
+    session.add(Analysis(
+        document_id=document.id, family=None, family_score=family_score,
+        findings=findings, key_terms=None,
+        suggested_decision="changes_requested",
+        rationale="Automated analysis unavailable (family undetermined); "
+                  "route to full manual review.",
+        dropped_uncited=0, model_strong="none", model_fast="none",
+        prompt_version=PROMPT_VERSION,
+        latency_ms=int((time.monotonic() - started) * 1000),
+    ))
+    document.status = DocumentStatus.analyzed
+    record_event(
+        session, actor_type=ActorType.system, actor_id="worker:analyze",
+        action="stage.analyzed", object_type="document", object_id=document.id,
+        detail={"family": None, "family_score": family_score,
+                "manual_review": True, "findings": len(findings)},
+    )
+
+
 def run_analyze(
     session: Session,
     masked_storage: MaskedStorage,
@@ -58,10 +99,11 @@ def run_analyze(
 
     family, family_score = detect_family(sections)
     if family is None:
-        raise ValueError(
-            f"no template family matched (best score {family_score:.2f}); "
-            "unknown-family analysis is out of POC scope — flag for manual review"
-        )
+        # graceful degradation (Phase 7): typically a poor scan whose OCR
+        # lost most headings. No LLM guessing — a deterministic, cited
+        # finding routes the document to full manual review.
+        _store_manual_review_analysis(session, document, family_score, chunks, started)
+        return
     diff = diff_against_family(family, sections, masked_text)
 
     # tiered routing: FAST model extracts key terms

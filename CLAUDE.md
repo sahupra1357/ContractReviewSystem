@@ -53,13 +53,18 @@ functionality first, designed with scale (10K → millions of documents) in mind
 
 ## Current status
 
-**Phase 6 (Review application) complete — G6 PASS** (G0–G4 passed; G5
-PARTIAL, live-LLM eval pending). Auth: JWT via `/auth/login` (seed:
+**ALL PHASES COMPLETE — G0–G7 PASSED** (`docs/gates/`; G7 lists two
+presenter rehearsal items: scale corpus to ~100 docs, two cold-start
+dry-runs). POC measured numbers are in `docs/gates/G7_report.md`; demo
+script in `docs/demo_script.md`. Auth: JWT via `/auth/login` (seed:
 `uv run python -m backend.seed_users`; roles reviewer/admin; Cognito-shaped
 seam in `backend/auth.py`). Review API under `/review/*` — the decision
 endpoint is the ONLY path to approved/rejected (reviewer role + rationale
-mandatory). React SPA (login/upload/queue/contract-with-citations/PII
-admin/dashboard) is built into the backend image and served at :8000. Pipeline: upload → dedup/registry →
+mandatory; pipeline can never touch terminal decisions). React SPA served
+at :8000 from the backend image. LLM: containers use the direct API with
+the read-only `ant` profile mount; host-side runs may set
+`CRS_LLM_BASE_URL=http://127.0.0.1:8787` (loopback proxy). Do NOT set
+empty `ANTHROPIC_*` env vars — empty-but-set shadows the profile. Pipeline: upload → dedup/registry →
 extract → PII gate (fail-closed) → index (BGE-M3, hybrid retrieval,
 graph-lite) → **analyze** (template diff on masked text, STRONG-model brief
 over deviations only w/ mandatory citations + groundedness drop, FAST-model

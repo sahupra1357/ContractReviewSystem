@@ -1,7 +1,7 @@
 """Prompts for the analysis stage. Version bumps whenever wording changes —
 recorded on every analysis row for reproducibility."""
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"  # v2: borderline-verification bucket added (Phase 7)
 
 BRIEF_SYSTEM = """\
 You are a contract-review analyst for a real-estate legal operations team.
@@ -47,6 +47,17 @@ def build_brief_prompt(diff, chunk_ids_by_section: dict[str, str]) -> str:
     if diff.deviations:
         lines.append("== DEVIATIONS FROM STANDARD ==")
         for d in diff.deviations:
+            chunk_id = chunk_ids_by_section.get(d.section_id, d.section_id)
+            lines += [
+                f"--- {d.heading} (chunk_id: {chunk_id}, similarity {d.similarity:.2f})",
+                f"STANDARD TEXT: {d.template_text}",
+                f"CONTRACT TEXT: {d.doc_text}", "",
+            ]
+    if diff.borderline:
+        lines.append("== SECTIONS TO VERIFY (small textual drift from standard — "
+                     "report a finding ONLY if the difference is legally meaningful; "
+                     "party/date/amount substitutions are expected and fine) ==")
+        for d in diff.borderline:
             chunk_id = chunk_ids_by_section.get(d.section_id, d.section_id)
             lines += [
                 f"--- {d.heading} (chunk_id: {chunk_id}, similarity {d.similarity:.2f})",

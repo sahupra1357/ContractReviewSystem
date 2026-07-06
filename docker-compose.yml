@@ -66,9 +66,6 @@ services:
       CRS_PRESIDIO_ANALYZER_URL: http://presidio-analyzer:3000
       CRS_PRESIDIO_ANONYMIZER_URL: http://presidio-anonymizer:3000
       CRS_ENVIRONMENT: compose
-      CRS_LLM_BASE_URL: ${CRS_LLM_BASE_URL:-http://host.docker.internal:8787}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
       CRS_JWT_SECRET: ${CRS_JWT_SECRET:-dev-secret-change-me}
     ports:
       - "8000:8000"
@@ -94,12 +91,11 @@ services:
       CRS_PRESIDIO_ANALYZER_URL: http://presidio-analyzer:3000
       CRS_PRESIDIO_ANONYMIZER_URL: http://presidio-anonymizer:3000
       CRS_ENVIRONMENT: compose
-      CRS_LLM_BASE_URL: ${CRS_LLM_BASE_URL:-http://host.docker.internal:8787}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:-}
       CRS_JWT_SECRET: ${CRS_JWT_SECRET:-dev-secret-change-me}
     volumes:
       - hfcache:/root/.cache/huggingface   # BGE model weights, downloaded once
+      # POC-only: ant OAuth profile for the LLM proxy (Secrets Manager in prod)
+      - ${HOME}/.config/anthropic:/root/.config/anthropic:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"   # reach the host LLM proxy
     depends_on:

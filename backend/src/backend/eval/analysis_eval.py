@@ -99,7 +99,7 @@ def evaluate() -> int:
             dropped_total += analysis.dropped_uncited
             latencies.append(analysis.latency_ms)
             misses = [i for i, h in hits if not h]
-            print(f"  {labels['doc_id']}  family={analysis.family:20s} "
+            print(f"  {labels['doc_id']}  family={analysis.family or 'MANUAL-REVIEW':20s} "
                   f"findings={len(analysis.findings)} dropped={analysis.dropped_uncited} "
                   f"latency={analysis.latency_ms / 1000:.1f}s "
                   f"{'MISSED: ' + ','.join(misses) if misses else 'ok'}")

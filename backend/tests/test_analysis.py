@@ -173,3 +173,22 @@ def test_analyze_flags_injection_content(session, storage, masked_storage, monke
     assert len(injection) == 1
     assert injection[0]["severity"] == "high"
     assert injection[0]["citation"]  # cited like any other finding
+
+
+def test_family_detection_survives_ocr_garbled_headings():
+    """Poor scans garble headings ('INSURANCE' → 'INSURANGE'); detection and
+    diff must match fuzzily (Phase-7 fix — both poor scans failed analyze)."""
+    text = _lease_text()
+    garbled = (text
+               .replace("7. INSURANCE", "7. INSURANGE")
+               .replace("8. LIABILITY", "8. LIABILlTY")
+               .replace("5. SECURITY DEPOSIT", "5. SECURlTY DEP0SIT"))
+    sections = _sections_for(garbled)
+    family, score = detect_family(sections)
+    assert family == "lease-v1"
+    assert score >= 0.9
+
+    diff = diff_against_family(family, sections, garbled)
+    # garbled-but-present sections are matched, not reported missing
+    assert diff.missing == []
+    assert diff.extra == []

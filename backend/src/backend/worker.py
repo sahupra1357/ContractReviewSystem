@@ -17,11 +17,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend import jobs
+from backend.analysis.service import run_analyze
 from backend.audit import ActorType, record_event
 from backend.db import get_sessionmaker
 from backend.extraction.service import extract_document
 from backend.knowledge.embedder import Embedder, get_embedder
 from backend.knowledge.service import run_index
+from backend.llm.base import LLMClient
+from backend.llm.providers import get_llm_client
 from backend.models import Document, DocumentStatus, Job
 from backend.pii.service import run_pii_gate
 from backend.storage import MaskedStorage, RawStorage, S3MaskedStorage, S3RawStorage
@@ -29,6 +32,7 @@ from backend.storage import MaskedStorage, RawStorage, S3MaskedStorage, S3RawSto
 POLL_INTERVAL_SECONDS = 2.0
 
 _embedder: Embedder | None = None
+_llm: LLMClient | None = None
 
 
 def _get_embedder() -> Embedder:
@@ -36,6 +40,13 @@ def _get_embedder() -> Embedder:
     if _embedder is None:
         _embedder = get_embedder()
     return _embedder
+
+
+def _get_llm() -> LLMClient:
+    global _llm
+    if _llm is None:
+        _llm = get_llm_client()
+    return _llm
 
 
 def handle_extract(
@@ -77,7 +88,19 @@ def handle_index(
     run_index(session, masked, _get_embedder(), document)
 
 
-HANDLERS = {"extract": handle_extract, "mask": handle_mask, "index": handle_index}
+def handle_analyze(
+    session: Session, storage: RawStorage, masked: MaskedStorage, document: Document
+) -> None:
+    # masked-zone handle only — no provider ever sees raw text (invariant #1)
+    run_analyze(session, masked, _get_llm(), document)
+
+
+HANDLERS = {
+    "extract": handle_extract,
+    "mask": handle_mask,
+    "index": handle_index,
+    "analyze": handle_analyze,
+}
 
 
 def process_one(

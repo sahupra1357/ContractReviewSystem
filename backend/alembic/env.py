@@ -1,6 +1,7 @@
 from alembic import context
 from sqlalchemy import create_engine
 
+import backend.analysis.models  # noqa: F401
 import backend.audit  # noqa: F401  (register models on Base.metadata)
 import backend.knowledge.models  # noqa: F401
 import backend.models  # noqa: F401

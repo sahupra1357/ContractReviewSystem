@@ -1,0 +1,81 @@
+# Gate G5 Report — AI Analysis
+
+**Date:** 2026-07-06
+**Phase:** 5 — AI analysis (`docs/02_sdlc_plan.md`; design §3.5)
+**Result:** PARTIAL — implementation complete and unit-verified; the live-LLM
+golden-corpus eval is pending credentials (command below). The gate is NOT
+claimed passed until those numbers are measured.
+
+## What was built
+
+- **Multi-provider LLM adapter** (product-owner decision 2026-07-06):
+  one `LLMClient` interface, provider from `CRS_LLM_PROVIDER`.
+  - `anthropic` (default): official SDK; honors `ANTHROPIC_BASE_URL` (local
+    proxy) and SDK credential resolution. Tier defaults: strong
+    `claude-opus-4-8`, fast `claude-haiku-4-5`.
+  - `bedrock` (production path): `AnthropicBedrockMantle`,
+    `anthropic.`-prefixed ids, AWS region from config.
+  - `openai` / `nvidia` / `mistral` / `minimax` / `kimi` / `qwen`: one
+    OpenAI-compatible client with per-provider base URLs; **default model ids
+    for these are placeholders — set `CRS_LLM_MODEL_STRONG/FAST` explicitly.**
+- **Template diff engine** (deterministic, no LLM cost): family detection by
+  heading overlap; per-clause similarity vs the canonical standard
+  (`backend.analysis.reference_templates` — now the single source the golden
+  generator also imports); classifies standard / deviation / missing / extra.
+- **Review brief**: STRONG model analyzes only deviations+missing clauses
+  (the token-efficiency lever); FAST model extracts key terms (tiered
+  routing demonstrated). Output: findings with **mandatory citations**
+  (chunk_id or template_ref), suggested decision, rationale.
+- **Groundedness gate**: findings with citations not in the document's chunk
+  ids / valid template refs are DROPPED before storage and counted
+  (`dropped_uncited`) — zero uncited findings displayed, by construction.
+- **Injection heuristics** (Guardrails-equivalent, provider-independent):
+  instruction-like phrases in contract text produce a high-severity,
+  cited, system-attributed finding.
+- **Analyze worker stage**: masked-zone handle only; migration 0005
+  `analyses` (one per document, replaced on re-run); status → `analyzed`;
+  audited with models, counts, latency; JSON-parse retry then
+  `failed_analyze`.
+
+## Verified (evidence)
+
+- 46 unit tests pass (fake LLM), including: standard lease → zero
+  deviations; planted uncapped-liability + missing-insurance → correct
+  deviation/missing classification with template_refs; hallucinated citation
+  dropped (`dropped_uncited == 1`) while grounded finding kept; injection
+  phrase → cited high-severity finding; full pipeline chain
+  ingest→extract→mask→index→analyze ends `analyzed`. Lint clean.
+- Migration 0005 applied to the compose database; 22 analyze jobs are queued
+  behind the indexed golden corpus, ready for the live run.
+
+## NOT yet verified (required to claim G5)
+
+The live-LLM eval was not run in this session (LLM credentials/endpoint not
+confirmed). To complete the gate:
+
+```bash
+# from backend/, compose up, corpus indexed, LLM creds configured
+CRS_DATABASE_URL=postgresql+psycopg://crs:crs@localhost:5433/crs \
+    uv run python -m backend.eval.analysis_eval
+```
+
+It drains the 22 queued analyze jobs with the configured provider and
+measures: known-issue detection (≥ 0.80), dropped-uncited count, clean-doc
+false positives, per-doc latency vs the 5-minute SLA. Append the output to
+this report and flip the Result to PASS/FAIL.
+
+## Universal checklist (per /security-gate)
+
+- PII isolation: the analyze handler receives ONLY the masked-zone storage
+  handle; every provider sees masked text exclusively.
+- Zero auto-approval: `suggested_decision` is stored data — no code path
+  changes document status to approved/rejected; the model only proposes.
+- Audit: `stage.analyzed` with family, finding/dropped counts, models,
+  latency per document.
+- Secrets: provider keys/endpoints from config env only; nothing hardcoded.
+- Docs current: design §3.5 rewritten for multi-provider; CLAUDE.md updated.
+
+## Next
+
+Run the live eval above → finalize G5 → Phase 6 (review application: JWT
+auth, review queue, decision API with mandatory rationale, React UI).

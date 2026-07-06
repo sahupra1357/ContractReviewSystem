@@ -44,7 +44,7 @@ functionality first, designed with scale (10K → millions of documents) in mind
 | Compliance | SOX-aware (audit-ready structure; certification post-POC) |
 | Versioning | Latest version only (upgrade path in design doc §5.4) |
 | Platform | Local Docker, AWS-shaped 1:1 (mapping in design doc §7) |
-| LLM | Claude API behind a Bedrock-shaped adapter (production = Bedrock) |
+| LLM | Multi-provider adapter (2026-07-06): Claude API **default** (`CRS_LLM_PROVIDER=anthropic`), Bedrock for production, plus OpenAI-compatible support for GPT, Nemotron, Mistral, MiniMax, Kimi, Qwen. Tiered routing: `llm_model_strong` + `llm_model_fast`. Endpoint/keys from config only |
 | UI | React SPA |
 | Graph | Postgres graph-lite; Neptune only if ≥3-hop need is proven |
 | Golden set | Synthetic contracts (OQ-2 resolved 2026-07-05): 20–30 generated contracts with planted fake PII + planted issues, labels known by construction; must plant both known-list and novel PII; real-contract validation at pre-prod |
@@ -53,19 +53,19 @@ functionality first, designed with scale (10K → millions of documents) in mind
 
 ## Current status
 
-**Phase 4 (Knowledge & index) complete** — G0–G4 passed (`docs/gates/`);
-G4 recall@10 = 1.000 on 16 labeled queries (metric saturated at POC scale —
-re-measure at 10K). Pipeline: upload → dedup/registry → extract → PII gate
-(fail-closed) → **index** (clause chunks, BGE-M3 embeddings with chunk-hash
-cache, Postgres hybrid retrieval pgvector+FTS+RRF, optional BGE reranker,
-graph-lite parties-by-master-id + terms) → analyze job queued (Phase 5).
-ML deps are the `ml` extra (`uv sync --extra ml`); compose images include
-them (HF cache volume `hfcache`). Evals: `backend.eval.extraction_eval`,
-`pii_eval`, `index_golden` then `retrieval_eval` (use
-`CRS_DATABASE_URL=...5433...`). Hold resolution + master-table APIs under
-`/pii/*`. Next: Phase 5 (AI analysis: template diff, review brief with
-citations, Bedrock-shaped Claude adapter). `main.py` and `ppt_extract.py`
-at the repo root are scratch files — not application code.
+**Phase 5 (AI analysis) built — G5 PARTIAL** (live-LLM eval pending;
+G0–G4 passed, see `docs/gates/`). Pipeline: upload → dedup/registry →
+extract → PII gate (fail-closed) → index (BGE-M3, hybrid retrieval,
+graph-lite) → **analyze** (template diff on masked text, STRONG-model brief
+over deviations only w/ mandatory citations + groundedness drop, FAST-model
+key terms, injection heuristics) → status `analyzed`. LLM adapter is
+multi-provider (`CRS_LLM_PROVIDER`, default anthropic; bedrock; openai-compat
+for nvidia/mistral/minimax/kimi/qwen). Canonical contract templates:
+`backend.analysis.reference_templates` (golden generator imports from it).
+Evals: `extraction_eval`, `pii_eval`, `index_golden`, `retrieval_eval`,
+`analysis_eval` (needs LLM creds; 22 analyze jobs queued). ML deps: `uv sync
+--extra ml`. Next: finish G5 live eval, then Phase 6 (review app: JWT, queue,
+decision API, React UI). `main.py`/`ppt_extract.py` at repo root are scratch.
 
 ## Stack & layout
 

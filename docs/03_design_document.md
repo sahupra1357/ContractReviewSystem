@@ -162,10 +162,22 @@ contract decision.
   uncited findings are rejected by a groundedness check before display.
 - **Tiered routing:** cheap/fast model for classification & term extraction;
   strongest model for legal analysis. Prompt caching on template/family context.
-- **LLM adapter:** Bedrock-shaped interface; POC backend = Claude API,
-  production backend = Bedrock (Claude) via PrivateLink. Guardrails-equivalent
-  checks (injection heuristics on contract text, output grounding) in the
-  adapter layer.
+- **LLM adapter — multi-provider, configurable (updated 2026-07-06 per
+  product-owner decision):** one `LLMClient` interface; provider selected by
+  configuration (`CRS_LLM_PROVIDER`), never hardcoded. Masked text only ever
+  reaches any provider (invariant #1 applies regardless of vendor).
+
+  | Provider | Client path | Notes |
+  |---|---|---|
+  | `anthropic` (**default**) | official `anthropic` SDK (Messages API) | honors `ANTHROPIC_BASE_URL` (local proxy) ; default models: strong `claude-opus-4-8`, fast `claude-haiku-4-5` |
+  | `bedrock` (**production**) | `AnthropicBedrockMantle` (`anthropic[bedrock]`) | `anthropic.`-prefixed model ids, AWS region req.; the in-VPC PrivateLink path of the security review |
+  | `openai`, `nvidia` (Nemotron), `mistral`, `minimax`, `kimi` (Moonshot), `qwen` (DashScope) | one OpenAI-compatible chat-completions client | per-provider default base URLs; model/key via config; default model ids are placeholders to verify against each vendor's current catalog |
+
+  Tiered routing stays provider-agnostic: `llm_model_strong` (legal analysis)
+  and `llm_model_fast` (classification/extraction) resolve per provider.
+  Guardrails-equivalent checks (injection heuristics on contract text, output
+  grounding/citation validation) live in the analysis layer **above** the
+  adapter, so they apply identically to every provider.
 
 ### 3.6 Review Application
 - **Backend:** FastAPI — auth (JWT, Cognito-shaped), RBAC (reviewer, admin),

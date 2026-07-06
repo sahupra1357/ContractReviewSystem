@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     s3_bucket_audit: str = "audit"
     presidio_analyzer_url: str = "http://localhost:5002"
     presidio_anonymizer_url: str = "http://localhost:5001"
-    # LLM adapter (Bedrock-shaped); endpoint always from config, never hardcoded
-    anthropic_base_url: str | None = None
+    # LLM adapter — multi-provider (design §3.5); endpoints/keys from config only
+    # anthropic | bedrock | openai | nvidia | mistral | minimax | kimi | qwen
+    llm_provider: str = "anthropic"
+    llm_model_strong: str | None = None  # None → provider default
+    llm_model_fast: str | None = None
+    llm_api_key: str | None = None       # None → SDK env resolution (anthropic)
+    llm_base_url: str | None = None      # None → provider default / ANTHROPIC_BASE_URL
+    aws_region: str = "us-east-1"        # bedrock only
     environment: str = "local"
 
 

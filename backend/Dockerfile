@@ -11,7 +11,9 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY alembic.ini ./
 COPY alembic ./alembic
-RUN uv pip install --system .
+# .[ml] pulls sentence-transformers/torch for BGE-M3 embeddings + reranker.
+# Model weights (~2.3GB) download on first use into the hfcache volume.
+RUN uv pip install --system ".[ml]"
 
 # Run migrations, then serve. Failing migrations must fail the container.
 CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]

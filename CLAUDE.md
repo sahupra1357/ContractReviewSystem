@@ -53,16 +53,18 @@ functionality first, designed with scale (10K → millions of documents) in mind
 
 ## Current status
 
-**Phase 3 (PII gate) complete** — G0–G3 passed (`docs/gates/`); G3 measured
-recall 1.0000, 6/6 novel-PII docs halted, 0% false-alarm burden.
-Pipeline: upload → dedup/registry → extract (fast path / tesseract OCR,
-clause segmentation) → **PII gate** (deterministic master-table masking →
-Presidio+regex fail-closed tripwire → `masked.json` in masked zone OR
-`pii_hold`) → index job queued (Phase 4). Hold resolution + master-table
-APIs under `/pii/*`; seed: `uv run python -m backend.pii.seed
-../golden_set/master_table_seed.yaml`. Evals: `backend.eval.extraction_eval`,
-`backend.eval.pii_eval` (needs compose Presidio). Next: Phase 4 (chunking,
-embeddings, hybrid retrieval, graph-lite). `main.py` and `ppt_extract.py`
+**Phase 4 (Knowledge & index) complete** — G0–G4 passed (`docs/gates/`);
+G4 recall@10 = 1.000 on 16 labeled queries (metric saturated at POC scale —
+re-measure at 10K). Pipeline: upload → dedup/registry → extract → PII gate
+(fail-closed) → **index** (clause chunks, BGE-M3 embeddings with chunk-hash
+cache, Postgres hybrid retrieval pgvector+FTS+RRF, optional BGE reranker,
+graph-lite parties-by-master-id + terms) → analyze job queued (Phase 5).
+ML deps are the `ml` extra (`uv sync --extra ml`); compose images include
+them (HF cache volume `hfcache`). Evals: `backend.eval.extraction_eval`,
+`pii_eval`, `index_golden` then `retrieval_eval` (use
+`CRS_DATABASE_URL=...5433...`). Hold resolution + master-table APIs under
+`/pii/*`. Next: Phase 5 (AI analysis: template diff, review brief with
+citations, Bedrock-shaped Claude adapter). `main.py` and `ppt_extract.py`
 at the repo root are scratch files — not application code.
 
 ## Stack & layout

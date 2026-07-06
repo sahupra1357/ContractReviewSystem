@@ -20,11 +20,22 @@ from backend import jobs
 from backend.audit import ActorType, record_event
 from backend.db import get_sessionmaker
 from backend.extraction.service import extract_document
+from backend.knowledge.embedder import Embedder, get_embedder
+from backend.knowledge.service import run_index
 from backend.models import Document, DocumentStatus, Job
 from backend.pii.service import run_pii_gate
 from backend.storage import MaskedStorage, RawStorage, S3MaskedStorage, S3RawStorage
 
 POLL_INTERVAL_SECONDS = 2.0
+
+_embedder: Embedder | None = None
+
+
+def _get_embedder() -> Embedder:
+    global _embedder
+    if _embedder is None:
+        _embedder = get_embedder()
+    return _embedder
 
 
 def handle_extract(
@@ -59,7 +70,14 @@ def handle_mask(
     run_pii_gate(session, storage, masked, document)
 
 
-HANDLERS = {"extract": handle_extract, "mask": handle_mask}
+def handle_index(
+    session: Session, storage: RawStorage, masked: MaskedStorage, document: Document
+) -> None:
+    # deliberately does NOT pass the raw handle — index reads masked only
+    run_index(session, masked, _get_embedder(), document)
+
+
+HANDLERS = {"extract": handle_extract, "mask": handle_mask, "index": handle_index}
 
 
 def process_one(

@@ -86,6 +86,8 @@ services:
       CRS_PRESIDIO_ANALYZER_URL: http://presidio-analyzer:3000
       CRS_PRESIDIO_ANONYMIZER_URL: http://presidio-anonymizer:3000
       CRS_ENVIRONMENT: compose
+    volumes:
+      - hfcache:/root/.cache/huggingface   # BGE model weights, downloaded once
     depends_on:
       backend:                     # backend applies migrations first
         condition: service_healthy
@@ -93,3 +95,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  hfcache:

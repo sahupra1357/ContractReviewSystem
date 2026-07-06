@@ -53,15 +53,17 @@ functionality first, designed with scale (10K → millions of documents) in mind
 
 ## Current status
 
-**Phase 2 (Extraction) complete** — G0–G2 passed (`docs/gates/`).
-Pipeline so far: upload API → dedup/registry → extract worker (born-digital
-fast path via pypdf/python-docx, OCR via tesseract+pypdfium2, clause
-segmentation with offsets+page provenance) → `extracted.json` in the RAW
-zone. Golden set generated & frozen (22 docs, 3 families). Eval:
-`uv run python -m backend.eval.extraction_eval`. Next: Phase 3 (PII gate:
-master table + deterministic masking + Presidio fail-closed tripwire).
-`main.py` and `ppt_extract.py` at the repo root are scratch files from the
-analysis phase — not application code.
+**Phase 3 (PII gate) complete** — G0–G3 passed (`docs/gates/`); G3 measured
+recall 1.0000, 6/6 novel-PII docs halted, 0% false-alarm burden.
+Pipeline: upload → dedup/registry → extract (fast path / tesseract OCR,
+clause segmentation) → **PII gate** (deterministic master-table masking →
+Presidio+regex fail-closed tripwire → `masked.json` in masked zone OR
+`pii_hold`) → index job queued (Phase 4). Hold resolution + master-table
+APIs under `/pii/*`; seed: `uv run python -m backend.pii.seed
+../golden_set/master_table_seed.yaml`. Evals: `backend.eval.extraction_eval`,
+`backend.eval.pii_eval` (needs compose Presidio). Next: Phase 4 (chunking,
+embeddings, hybrid retrieval, graph-lite). `main.py` and `ppt_extract.py`
+at the repo root are scratch files — not application code.
 
 ## Stack & layout
 

@@ -21,18 +21,22 @@ from backend.audit import ActorType, record_event
 from backend.db import get_sessionmaker
 from backend.extraction.service import extract_document
 from backend.models import Document, DocumentStatus, Job
-from backend.storage import RawStorage, S3RawStorage
+from backend.pii.service import run_pii_gate
+from backend.storage import MaskedStorage, RawStorage, S3MaskedStorage, S3RawStorage
 
 POLL_INTERVAL_SECONDS = 2.0
 
 
-def handle_extract(session: Session, storage: RawStorage, document: Document) -> None:
+def handle_extract(
+    session: Session, storage: RawStorage, masked: MaskedStorage, document: Document
+) -> None:
     data = storage.get_raw(document.raw_key)
     artifact = extract_document(data, document.filename)
     # Extracted text is PRE-PII-GATE: raw zone only (invariant #1).
     artifact_key = f"{document.id}/extracted.json"
     storage.put_raw(artifact_key, json.dumps(artifact).encode(), "application/json")
     document.status = DocumentStatus.extracted
+    jobs.enqueue(session, document_id=document.id, stage="mask")
     record_event(
         session,
         actor_type=ActorType.system,
@@ -49,10 +53,18 @@ def handle_extract(session: Session, storage: RawStorage, document: Document) ->
     )
 
 
-HANDLERS = {"extract": handle_extract}
+def handle_mask(
+    session: Session, storage: RawStorage, masked: MaskedStorage, document: Document
+) -> None:
+    run_pii_gate(session, storage, masked, document)
 
 
-def process_one(session: Session, storage: RawStorage, *, stage: str) -> bool:
+HANDLERS = {"extract": handle_extract, "mask": handle_mask}
+
+
+def process_one(
+    session: Session, storage: RawStorage, masked: MaskedStorage, *, stage: str
+) -> bool:
     """Claim and run one job; returns False when the queue is empty."""
     job: Job | None = jobs.claim_next(session, stage=stage)
     if job is None:
@@ -63,7 +75,7 @@ def process_one(session: Session, storage: RawStorage, *, stage: str) -> bool:
         select(Document).where(Document.id == job.document_id)
     ).scalar_one()
     try:
-        HANDLERS[stage](session, storage, document)
+        HANDLERS[stage](session, storage, masked, document)
         jobs.complete(job)
         session.commit()
     except Exception as exc:  # noqa: BLE001 — worker must record any failure
@@ -90,12 +102,13 @@ def process_one(session: Session, storage: RawStorage, *, stage: str) -> bool:
 def run(once: bool) -> None:
     sessionmaker = get_sessionmaker()
     storage = S3RawStorage()
+    masked = S3MaskedStorage()
     stages = list(HANDLERS)
     while True:
         worked = False
         for stage in stages:
             with sessionmaker() as session:
-                while process_one(session, storage, stage=stage):
+                while process_one(session, storage, masked, stage=stage):
                     worked = True
         if once and not worked:
             return

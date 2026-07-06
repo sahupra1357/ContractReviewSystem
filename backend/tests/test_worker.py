@@ -17,10 +17,10 @@ def _ingest_txt(session, storage, body=b"1. PARTIES\nAcme and Rivera agree.\n"):
     return result
 
 
-def test_extract_job_produces_artifact_and_status(session, storage):
+def test_extract_job_produces_artifact_and_status(session, storage, masked_storage):
     result = _ingest_txt(session, storage)
 
-    assert process_one(session, storage, stage="extract") is True
+    assert process_one(session, storage, masked_storage, stage="extract") is True
     doc = session.get(Document, result.document_id)
     assert doc.status == "extracted"
 
@@ -28,15 +28,18 @@ def test_extract_job_produces_artifact_and_status(session, storage):
     assert artifact["method"] == "plain-text"
     assert artifact["sections"][0]["heading"] == "1. PARTIES"
 
-    job = session.execute(select(Job)).scalar_one()
+    job = session.execute(select(Job).where(Job.stage == "extract")).scalar_one()
     assert job.state == "done"
+    # extract chains the document into the PII gate
+    mask_job = session.execute(select(Job).where(Job.stage == "mask")).scalar_one()
+    assert mask_job.state == "pending"
     actions = [e.action for e in session.execute(select(AuditEvent)).scalars()]
     assert actions == ["ingest.landed", "stage.extracted"]
     # queue drained
-    assert process_one(session, storage, stage="extract") is False
+    assert process_one(session, storage, masked_storage, stage="extract") is False
 
 
-def test_extract_failure_is_recorded_not_silent(session, storage):
+def test_extract_failure_is_recorded_not_silent(session, storage, masked_storage):
     # a .pdf that is not a PDF → extraction raises → failed_extract
     result = ingest_document(
         session, storage, source="upload", filename="broken.pdf",
@@ -44,7 +47,7 @@ def test_extract_failure_is_recorded_not_silent(session, storage):
     )
     session.commit()
 
-    assert process_one(session, storage, stage="extract") is True
+    assert process_one(session, storage, masked_storage, stage="extract") is True
     doc = session.get(Document, result.document_id)
     assert doc.status == "failed_extract"
 
@@ -60,15 +63,15 @@ def test_extract_failure_is_recorded_not_silent(session, storage):
     assert failure_events[0].detail["error"]
 
 
-def test_rerun_after_reenqueue_is_idempotent(session, storage):
+def test_rerun_after_reenqueue_is_idempotent(session, storage, masked_storage):
     from backend import jobs as jobqueue
 
     result = _ingest_txt(session, storage)
-    assert process_one(session, storage, stage="extract") is True
+    assert process_one(session, storage, masked_storage, stage="extract") is True
 
     jobqueue.enqueue(session, document_id=result.document_id, stage="extract")
     session.commit()
-    assert process_one(session, storage, stage="extract") is True
+    assert process_one(session, storage, masked_storage, stage="extract") is True
 
     # same artifact key overwritten — no duplicate outputs
     doc = session.get(Document, result.document_id)

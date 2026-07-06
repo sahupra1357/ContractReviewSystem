@@ -6,13 +6,13 @@ decision endpoint is the only path to approved/rejected; everything audited.
 import json
 
 from sqlalchemy import select
-from tests.conftest import make_client
 
 from backend.api.review import Decision
 from backend.audit import AuditEvent
 from backend.auth import get_actor
 from backend.main import app
 from backend.models import Document, DocumentStatus, Job
+from tests.conftest import make_client
 
 
 def teardown_function():
@@ -139,9 +139,11 @@ def test_decision_rejected_for_non_reviewable_status(session, storage, masked_st
 
 
 def test_no_pipeline_path_to_approval():
-    """Invariant #2 structurally: no pipeline module references the
-    approved/rejected states — only the review API does."""
+    """Invariant #2 structurally: no pipeline module ASSIGNS the
+    approved/rejected states — only the review API does. worker.py may read
+    them, exclusively inside its never-touch terminal guard."""
     import pathlib
+    import re
 
     src = pathlib.Path(__file__).parents[1] / "src" / "backend"
     offenders = []
@@ -150,8 +152,16 @@ def test_no_pipeline_path_to_approval():
         if rel in ("api/review.py", "models.py"):  # definition + decision path
             continue
         text = path.read_text()
-        if "DocumentStatus.approved" in text or "DocumentStatus.rejected" in text:
-            offenders.append(rel)
+        mentions = text.count("DocumentStatus.approved") + text.count(
+            "DocumentStatus.rejected")
+        if mentions == 0:
+            continue
+        guard = re.search(
+            r"_TERMINAL_STATUSES = \{DocumentStatus\.approved, "
+            r"DocumentStatus\.rejected\}", text)
+        if rel == "worker.py" and guard and mentions == 2:
+            continue  # both mentions are the guard-set literal
+        offenders.append(rel)
     assert offenders == []
 
 

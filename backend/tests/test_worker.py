@@ -78,3 +78,31 @@ def test_rerun_after_reenqueue_is_idempotent(session, storage, masked_storage):
     artifact_keys = [k for k in storage.objects if k.endswith("extracted.json")]
     assert artifact_keys == [f"{doc.id}/extracted.json"]
     assert doc.status == "extracted"
+
+
+def test_pipeline_never_touches_terminal_decisions(session, storage, masked_storage):
+    """Phase-7 regression: a pending/failing pipeline job must not overwrite
+    a document a human already approved (found by the LLM-down drill)."""
+    from backend import jobs as jobqueue
+    from backend.models import DocumentStatus
+
+    result = _ingest_txt(session, storage)
+    doc = session.get(Document, result.document_id)
+    doc.status = DocumentStatus.approved  # human decision already made
+    session.commit()
+
+    # the extract job from ingestion is still pending — worker must skip it
+    assert process_one(session, storage, masked_storage, stage="extract") is True
+    doc = session.get(Document, result.document_id)
+    assert doc.status == "approved"
+    job = session.execute(select(Job).where(Job.stage == "extract")).scalar_one()
+    assert job.state == "done"
+    actions = [e.action for e in session.execute(select(AuditEvent)).scalars()]
+    assert "stage.skipped_terminal" in actions
+
+    # and a FAILING job on a terminal doc must not stomp the status either
+    jobqueue.enqueue(session, document_id=doc.id, stage="analyze")
+    doc.status = DocumentStatus.rejected
+    session.commit()
+    assert process_one(session, storage, masked_storage, stage="analyze") is True
+    assert session.get(Document, result.document_id).status == "rejected"

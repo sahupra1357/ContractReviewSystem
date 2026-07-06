@@ -103,6 +103,13 @@ HANDLERS = {
 }
 
 
+# Human decisions are final for the pipeline: stages neither run on nor
+# overwrite documents in these states (invariant #2 corollary — found by the
+# Phase-7 LLM-down failure drill, where a failing analyze job stomped an
+# approved document).
+_TERMINAL_STATUSES = {DocumentStatus.approved, DocumentStatus.rejected}
+
+
 def process_one(
     session: Session, storage: RawStorage, masked: MaskedStorage, *, stage: str
 ) -> bool:
@@ -115,6 +122,16 @@ def process_one(
     document = session.execute(
         select(Document).where(Document.id == job.document_id)
     ).scalar_one()
+    if DocumentStatus(document.status) in _TERMINAL_STATUSES:
+        jobs.complete(job)
+        record_event(
+            session, actor_type=ActorType.system, actor_id=f"worker:{stage}",
+            action="stage.skipped_terminal", object_type="document",
+            object_id=document.id,
+            detail={"stage": stage, "status": document.status, "job_id": job.id},
+        )
+        session.commit()
+        return True
     try:
         HANDLERS[stage](session, storage, masked, document)
         jobs.complete(job)
@@ -125,7 +142,8 @@ def process_one(
             select(Document).where(Document.id == job.document_id)
         ).scalar_one()
         job = session.get(Job, job.id)
-        document.status = f"failed_{stage}"
+        if DocumentStatus(document.status) not in _TERMINAL_STATUSES:
+            document.status = f"failed_{stage}"
         jobs.fail(job, f"{type(exc).__name__}: {exc}")
         record_event(
             session,

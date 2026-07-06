@@ -16,6 +16,7 @@ dependencies = [
     "pgvector>=0.4.2",
     "psycopg[binary]",
     "pydantic-settings",
+    "pyjwt>=2.13.0",
     "pypdf>=6.14.2",
     "pypdfium2>=5.11.0",
     "pytesseract>=0.3.13",

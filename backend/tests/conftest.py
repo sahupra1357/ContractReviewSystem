@@ -55,3 +55,24 @@ def storage():
 @pytest.fixture()
 def masked_storage():
     return FakeMaskedStorage()
+
+
+def make_client(session, storage=None, *, role="reviewer", username="reviewer-1"):
+    """TestClient with DB/storage/auth dependency overrides."""
+    from fastapi.testclient import TestClient
+
+    from backend.api.ingest import get_raw_storage
+    from backend.api.review import get_masked_storage
+    from backend.auth import Actor, get_actor
+    from backend.db import get_db
+    from backend.main import app
+
+    app.dependency_overrides[get_db] = lambda: session
+    if storage is not None:
+        app.dependency_overrides[get_raw_storage] = lambda: storage
+        if hasattr(storage, "get_masked"):
+            app.dependency_overrides[get_masked_storage] = lambda: storage
+    app.dependency_overrides[get_actor] = lambda: Actor(
+        user_id="u-" + username, username=username, role=role
+    )
+    return TestClient(app)

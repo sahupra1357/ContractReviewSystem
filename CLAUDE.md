@@ -53,8 +53,13 @@ functionality first, designed with scale (10K → millions of documents) in mind
 
 ## Current status
 
-**Phase 5 (AI analysis) built — G5 PARTIAL** (live-LLM eval pending;
-G0–G4 passed, see `docs/gates/`). Pipeline: upload → dedup/registry →
+**Phase 6 (Review application) complete — G6 PASS** (G0–G4 passed; G5
+PARTIAL, live-LLM eval pending). Auth: JWT via `/auth/login` (seed:
+`uv run python -m backend.seed_users`; roles reviewer/admin; Cognito-shaped
+seam in `backend/auth.py`). Review API under `/review/*` — the decision
+endpoint is the ONLY path to approved/rejected (reviewer role + rationale
+mandatory). React SPA (login/upload/queue/contract-with-citations/PII
+admin/dashboard) is built into the backend image and served at :8000. Pipeline: upload → dedup/registry →
 extract → PII gate (fail-closed) → index (BGE-M3, hybrid retrieval,
 graph-lite) → **analyze** (template diff on masked text, STRONG-model brief
 over deviations only w/ mandatory citations + groundedness drop, FAST-model

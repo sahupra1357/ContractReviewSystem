@@ -1,21 +1,17 @@
-from fastapi.testclient import TestClient
 
-from backend.api.ingest import get_actor_id, get_db, get_raw_storage
+from tests.conftest import make_client
+
+from backend.auth import get_actor
 from backend.main import app
-
-
-def _client(session, storage) -> TestClient:
-    app.dependency_overrides[get_db] = lambda: session
-    app.dependency_overrides[get_raw_storage] = lambda: storage
-    return TestClient(app)
 
 
 def teardown_function():
     app.dependency_overrides.clear()
 
 
-def test_upload_requires_actor_header(session, storage):
-    client = _client(session, storage)
+def test_upload_requires_auth(session, storage):
+    client = make_client(session, storage)
+    del app.dependency_overrides[get_actor]  # no identity → 401
     response = client.post(
         "/ingest/upload", files=[("files", ("a.pdf", b"data", "application/pdf"))]
     )
@@ -23,10 +19,9 @@ def test_upload_requires_actor_header(session, storage):
 
 
 def test_multi_file_upload_with_planted_duplicate(session, storage):
-    client = _client(session, storage)
+    client = make_client(session, storage)
     response = client.post(
         "/ingest/upload",
-        headers={"X-Actor-Id": "reviewer-1"},
         files=[
             ("files", ("a.pdf", b"contract A", "application/pdf")),
             ("files", ("b.pdf", b"contract B", "application/pdf")),
@@ -41,18 +36,23 @@ def test_multi_file_upload_with_planted_duplicate(session, storage):
 
 
 def test_empty_file_is_rejected(session, storage):
-    client = _client(session, storage)
+    client = make_client(session, storage)
     response = client.post(
         "/ingest/upload",
-        headers={"X-Actor-Id": "reviewer-1"},
         files=[("files", ("empty.pdf", b"", "application/pdf"))],
     )
     assert response.status_code == 422
 
 
-def test_actor_dependency_rejects_blank():
-    import pytest
-    from fastapi import HTTPException
+def test_upload_attributed_to_jwt_identity(session, storage):
+    from sqlalchemy import select
 
-    with pytest.raises(HTTPException):
-        get_actor_id(None)
+    from backend.models import Document
+
+    client = make_client(session, storage, username="reviewer-7")
+    client.post(
+        "/ingest/upload",
+        files=[("files", ("a.pdf", b"data", "application/pdf"))],
+    )
+    doc = session.execute(select(Document)).scalar_one()
+    assert doc.uploaded_by == "reviewer-7"

@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend import jobs
-from backend.api.ingest import get_actor_id
 from backend.audit import ActorType, record_event
+from backend.auth import AdminActor
 from backend.db import get_db
 from backend.models import Document
 from backend.pii.models import HoldStatus, KnownEntity, PiiHold
@@ -49,7 +49,7 @@ class MasterEntryRequest(BaseModel):
 @router.get("/holds", response_model=list[HoldOut])
 def list_holds(
     session: Annotated[Session, Depends(get_db)],
-    _actor: Annotated[str, Depends(get_actor_id)],
+    _actor: AdminActor,
     status: str = "open",
 ) -> list[PiiHold]:
     return list(
@@ -64,8 +64,9 @@ def resolve_hold(
     hold_id: int,
     body: ResolveRequest,
     session: Annotated[Session, Depends(get_db)],
-    actor_id: Annotated[str, Depends(get_actor_id)],
+    actor: AdminActor,
 ) -> PiiHold:
+    actor_id = actor.username
     hold = session.get(PiiHold, hold_id)
     if hold is None:
         raise HTTPException(status_code=404, detail="hold not found")
@@ -132,7 +133,7 @@ def resolve_hold(
 @router.get("/master")
 def list_master(
     session: Annotated[Session, Depends(get_db)],
-    _actor: Annotated[str, Depends(get_actor_id)],
+    _actor: AdminActor,
 ) -> list[dict]:
     return [
         {"id": e.id, "value": e.value, "entity_type": e.entity_type,
@@ -147,8 +148,9 @@ def list_master(
 def add_master_entry(
     body: MasterEntryRequest,
     session: Annotated[Session, Depends(get_db)],
-    actor_id: Annotated[str, Depends(get_actor_id)],
+    actor: AdminActor,
 ) -> dict:
+    actor_id = actor.username
     exists = session.execute(
         select(KnownEntity).where(KnownEntity.value == body.value)
     ).scalar_one_or_none()

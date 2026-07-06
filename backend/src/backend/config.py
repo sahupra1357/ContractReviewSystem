@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     llm_api_key: str | None = None       # None → SDK env resolution (anthropic)
     llm_base_url: str | None = None      # None → provider default / ANTHROPIC_BASE_URL
     aws_region: str = "us-east-1"        # bedrock only
+    jwt_secret: str = "dev-secret-change-me"  # POC only; Cognito in production
+    static_dir: str | None = None  # built React UI (set in the container image)
     environment: str = "local"
 
 

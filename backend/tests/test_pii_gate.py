@@ -6,11 +6,9 @@ invariants are exercised for real.
 
 import json
 
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 import backend.pii.service as pii_service
-from backend.api.ingest import get_db
 from backend.audit import AuditEvent
 from backend.ingestion.core import ingest_document
 from backend.main import app
@@ -103,8 +101,9 @@ def test_flagged_document_halts_fail_closed(session, storage, masked_storage, mo
 
 
 def _client(session):
-    app.dependency_overrides[get_db] = lambda: session
-    return TestClient(app)
+    from tests.conftest import make_client
+
+    return make_client(session, role="admin", username="admin-1")
 
 
 def teardown_function():
@@ -128,7 +127,6 @@ def test_add_to_master_requeues_and_remask_passes(
     client = _client(session)
     response = client.post(
         f"/pii/holds/{hold_id}/resolve",
-        headers={"X-Actor-Id": "admin-1"},
         json={"action": "add_to_master", "entity_type": "PERSON"},
     )
     assert response.status_code == 200
@@ -164,14 +162,12 @@ def test_dismiss_requires_rationale_and_suppresses_on_rerun(
     # no rationale → rejected
     response = client.post(
         f"/pii/holds/{hold_id}/resolve",
-        headers={"X-Actor-Id": "admin-1"},
         json={"action": "dismiss"},
     )
     assert response.status_code == 422
 
     response = client.post(
         f"/pii/holds/{hold_id}/resolve",
-        headers={"X-Actor-Id": "admin-1"},
         json={"action": "dismiss", "rationale": "Lake name, not a person"},
     )
     assert response.status_code == 200

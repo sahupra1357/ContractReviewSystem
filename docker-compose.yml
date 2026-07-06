@@ -57,7 +57,9 @@ services:
       - "5001:3000"
 
   backend:                        # → API Gateway + Lambda/ECS
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       CRS_DATABASE_URL: postgresql+psycopg://crs:crs@postgres:5432/crs
       CRS_S3_ENDPOINT_URL: http://minio:9000
@@ -78,7 +80,9 @@ services:
       retries: 10
 
   worker:                         # → ECS/EKS pipeline workers (SQS consumers)
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     command: python -m backend.worker
     environment:
       CRS_DATABASE_URL: postgresql+psycopg://crs:crs@postgres:5432/crs

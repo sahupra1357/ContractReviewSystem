@@ -52,10 +52,13 @@ functionality first, designed with scale (10K → millions of documents) in mind
 
 ## Current status
 
-**Phase 0 (Foundations) built** — design signed off 2026-07-06; see
-`docs/gates/` for gate reports. Next: Phase 1 (Ingestion: UploadConnector,
-landing store, dedup, job queue). `main.py` and `ppt_extract.py` at the repo
-root are scratch files from the analysis phase — not application code.
+**Phase 1 (Ingestion) complete** — G0 and G1 passed (`docs/gates/`).
+Upload API (`POST /ingest/upload`, multi-file, `X-Actor-Id` header as the
+auth placeholder until Phase 6 JWT), SHA-256 dedup, document registry, job
+queue, connector interface. Next: Phase 2 (Extraction: born-digital fast
+path + OCR worker + clause structure) — needs OQ-3 (contract families)
+answered for the golden-set generator. `main.py` and `ppt_extract.py` at the
+repo root are scratch files from the analysis phase — not application code.
 
 ## Stack & layout
 

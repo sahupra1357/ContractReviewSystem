@@ -26,10 +26,19 @@ const NAV = [
 
 export default function App() {
   const route = useHashRoute();
-  const authed = Boolean(getToken());
+  // reactive: reading localStorage during render never triggers a re-render,
+  // so a successful login looked like "nothing happened"
+  const [authed, setAuthed] = useState(() => Boolean(getToken()));
 
   if (!authed || route.startsWith("#/login")) {
-    return <Login onLogin={() => (window.location.hash = "#/queue")} />;
+    return (
+      <Login
+        onLogin={() => {
+          setAuthed(true);
+          window.location.hash = "#/queue";
+        }}
+      />
+    );
   }
 
   let page = <Queue />;
@@ -68,6 +77,7 @@ export default function App() {
             className="btn btn-ghost"
             onClick={() => {
               clearSession();
+              setAuthed(false);
               window.location.hash = "#/login";
             }}
           >

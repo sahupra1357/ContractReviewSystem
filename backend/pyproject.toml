@@ -58,3 +58,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# pin classification — CI and local must agree on import grouping
+known-first-party = ["backend", "tests"]

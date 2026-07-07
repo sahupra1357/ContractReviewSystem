@@ -1,8 +1,7 @@
 
-from tests.conftest import make_client
-
 from backend.auth import get_actor
 from backend.main import app
+from tests.conftest import make_client
 
 
 def teardown_function():

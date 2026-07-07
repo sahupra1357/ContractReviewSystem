@@ -1,0 +1,99 @@
+# Render Blueprint — Contract Review Co-Pilot DEMO deployment
+#
+# ⚠ SYNTHETIC DATA ONLY. This hosts the C-level demo with the generated
+# corpus. Never upload real contracts to a PaaS instance — production is the
+# in-VPC AWS architecture (docs/03_design_document.md §7).
+#
+# After the first deploy:
+#   1. Set ANTHROPIC_API_KEY and CRS_DEMO_PASSWORD in the dashboard (sync: false).
+#   2. Open a shell on `crs-backend` → `python -m backend.seed_demo`.
+#   3. Verify the internal service hostnames below match the dashboard's
+#      "internal address" for each private service (Render assigns
+#      <name>:<port>); adjust env vars if they differ.
+
+previews:
+  generation: off
+
+databases:
+  - name: crs-postgres
+    plan: basic-1gb
+    postgresMajorVersion: "16"   # pgvector: CREATE EXTENSION runs in migration 0004
+
+services:
+  # ---------- API + React UI ----------
+  - type: web
+    name: crs-backend
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    plan: standard            # extraction fast path + API; no ML inference here
+    healthCheckPath: /health
+    envVars: &app_env
+      - key: CRS_DATABASE_URL
+        fromDatabase:
+          name: crs-postgres
+          property: connectionString   # postgres:// — normalized in db.py
+      - key: CRS_S3_ENDPOINT_URL
+        value: http://crs-minio:9000
+      - key: CRS_S3_ACCESS_KEY
+        fromService: { type: pserv, name: crs-minio, envVarKey: MINIO_ROOT_USER }
+      - key: CRS_S3_SECRET_KEY
+        fromService: { type: pserv, name: crs-minio, envVarKey: MINIO_ROOT_PASSWORD }
+      - key: CRS_PRESIDIO_ANALYZER_URL
+        value: http://crs-presidio-analyzer:3000
+      - key: CRS_PRESIDIO_ANONYMIZER_URL
+        value: http://crs-presidio-anonymizer:3000
+      - key: CRS_JWT_SECRET
+        generateValue: true
+      - key: CRS_DEMO_PASSWORD
+        sync: false            # set in dashboard; used by seed_demo
+      - key: ANTHROPIC_API_KEY
+        sync: false            # set in dashboard; profile mounts don't exist on Render
+      - key: CRS_ENVIRONMENT
+        value: render-demo
+
+  # ---------- pipeline worker (BGE-M3 inference lives here) ----------
+  - type: worker
+    name: crs-worker
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    dockerCommand: python -m backend.worker
+    plan: pro                  # ~8GB RAM for torch + BGE-M3 CPU inference
+    disk:
+      name: hf-cache
+      mountPath: /root/.cache/huggingface
+      sizeGB: 10               # model weights downloaded once (~2.3GB)
+    envVars: *app_env
+
+  # ---------- object store (raw / masked / audit zones) ----------
+  - type: pserv
+    name: crs-minio
+    runtime: image
+    image:
+      url: docker.io/minio/minio:latest
+    dockerCommand: minio server /data --address ":9000"
+    plan: starter
+    disk:
+      name: minio-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: MINIO_ROOT_USER
+        generateValue: true
+      - key: MINIO_ROOT_PASSWORD
+        generateValue: true
+
+  # ---------- PII gate services ----------
+  - type: pserv
+    name: crs-presidio-analyzer
+    runtime: image
+    image:
+      url: mcr.microsoft.com/presidio-analyzer:latest
+    plan: standard             # spaCy NER model needs ~2GB
+  - type: pserv
+    name: crs-presidio-anonymizer
+    runtime: image
+    image:
+      url: mcr.microsoft.com/presidio-anonymizer:latest
+    plan: starter

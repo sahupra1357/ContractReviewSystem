@@ -28,5 +28,8 @@ RUN uv pip install --system ".[ml]"
 COPY --from=ui /ui/dist /app/static
 ENV CRS_STATIC_DIR=/app/static
 
+# synthetic demo corpus for `python -m backend.seed_demo` (a few MB)
+COPY golden_set /app/golden_set
+
 # Run migrations, then serve. Failing migrations must fail the container.
 CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]

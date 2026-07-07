@@ -8,8 +8,31 @@ Only the ingestion and extraction stages may touch the raw bucket
 from typing import Protocol
 
 import boto3
+import botocore.exceptions
 
 from backend.config import get_settings
+
+
+def _client_and_bucket(bucket: str):
+    settings = get_settings()
+    client = boto3.client(
+        "s3",
+        endpoint_url=settings.s3_endpoint_url,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+    )
+    # idempotent: platforms without the compose minio-init step (e.g. Render)
+    # get their buckets on first use
+    try:
+        client.head_bucket(Bucket=bucket)
+    except botocore.exceptions.ClientError:
+        try:
+            client.create_bucket(Bucket=bucket)
+        except botocore.exceptions.ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code not in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists"):
+                raise
+    return client, bucket
 
 
 class RawStorage(Protocol):
@@ -29,14 +52,7 @@ class MaskedStorage(Protocol):
 
 class S3RawStorage:
     def __init__(self) -> None:
-        settings = get_settings()
-        self._client = boto3.client(
-            "s3",
-            endpoint_url=settings.s3_endpoint_url,
-            aws_access_key_id=settings.s3_access_key,
-            aws_secret_access_key=settings.s3_secret_key,
-        )
-        self._bucket = settings.s3_bucket_raw
+        self._client, self._bucket = _client_and_bucket(get_settings().s3_bucket_raw)
 
     def put_raw(self, key: str, data: bytes, content_type: str | None) -> None:
         extra = {"ContentType": content_type} if content_type else {}
@@ -49,14 +65,9 @@ class S3RawStorage:
 
 class S3MaskedStorage:
     def __init__(self) -> None:
-        settings = get_settings()
-        self._client = boto3.client(
-            "s3",
-            endpoint_url=settings.s3_endpoint_url,
-            aws_access_key_id=settings.s3_access_key,
-            aws_secret_access_key=settings.s3_secret_key,
+        self._client, self._bucket = _client_and_bucket(
+            get_settings().s3_bucket_masked
         )
-        self._bucket = settings.s3_bucket_masked
 
     def put_masked(self, key: str, data: bytes, content_type: str | None) -> None:
         extra = {"ContentType": content_type} if content_type else {}

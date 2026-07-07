@@ -9,14 +9,14 @@ import backend.knowledge.models  # noqa: F401
 import backend.models  # noqa: F401
 import backend.pii.models  # noqa: F401
 from backend.config import get_settings
-from backend.db import Base
+from backend.db import Base, _normalize_db_url
 
 target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=get_settings().database_url,
+        url=_normalize_db_url(get_settings().database_url),
         target_metadata=target_metadata,
         literal_binds=True,
     )
@@ -25,7 +25,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    engine = create_engine(get_settings().database_url)
+    engine = create_engine(_normalize_db_url(get_settings().database_url))
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():

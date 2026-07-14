@@ -50,6 +50,7 @@ functionality first, designed with scale (10K → millions of documents) in mind
 | Golden set | Synthetic contracts (OQ-2 resolved 2026-07-05): 20–30 generated contracts with planted fake PII + planted issues, labels known by construction; must plant both known-list and novel PII; real-contract validation at pre-prod |
 | Contract families | OQ-3 resolved 2026-07-06 (real-estate industry): lease agreement, property purchase agreement, vendor/property-services agreement |
 | PII gate | Deterministic-primary, fail-closed (2026-07-05, supersedes layered): PII **master table** (real table in POC + admin screen) is the only masking authority (fuzzy/OCR-tolerant matching); Presidio is a detector-only tripwire — any possible unregistered entity halts the doc in `pii_hold` for human resolution. Unknown PII never flows downstream. G3: recall ≥ 0.98 post-hold-resolution + false-alarm rate reported |
+| OCR | Confidence-gated multi-engine chain (2026-07-14, supersedes single-engine Tesseract; design doc §3.2): Tesseract → PaddleOCR → EasyOCR → Docling-last-resort (`CRS_OCR_ENGINE_CHAIN`), one adapter interface `ocr(page_image) → (text, confidence)`. MinerU **excluded** (2026-07-14: wraps PaddleOCR, no engine diversity); Docling kept last-resort for layout-aware rescue, RapidOCR backend (wraps external OCR — default EasyOCR — so lineage redundancy accepted). Per-page confidence mandatory, normalized 0–1 (Tesseract must use `image_to_data`, not `image_to_string`). Page below `CRS_OCR_CONFIDENCE_THRESHOLD` (default 0.80) retries the **next engine, that page only**; highest-confidence result wins. All engines below threshold → **`extract_hold`** (fail-closed, mirrors `pii_hold`): reviewer accepts best-effort text w/ rationale (→ `extracted`, mask enqueued) or rejects the scan (→ `failed_extract`); resolution API `/extract/holds`. Every attempt audited. **Implemented 2026-07-14** (`extraction/ocr_engines.py` adapters, `ocr_path.walk_chain`, `run_extract`, `ExtractHold` + migration 0007, `api/extract.py`). Heavy engines are the optional `ocr` extra (`uv sync --extra ocr`); default image = Tesseract only, others lazy-import + skip-with-audit. Tesseract adapter real (confidence via `image_to_data`); PaddleOCR/EasyOCR real adapters (validate at pre-prod when extra installed); Docling registered but reports unavailable until its per-page confidence is wired (never fabricated) |
 
 ## Current status
 
@@ -74,8 +75,13 @@ for nvidia/mistral/minimax/kimi/qwen). Canonical contract templates:
 `backend.analysis.reference_templates` (golden generator imports from it).
 Evals: `extraction_eval`, `pii_eval`, `index_golden`, `retrieval_eval`,
 `analysis_eval` (needs LLM creds; 22 analyze jobs queued). ML deps: `uv sync
---extra ml`. Next: finish G5 live eval, then Phase 6 (review app: JWT, queue,
-decision API, React UI). `main.py`/`ppt_extract.py` at repo root are scratch.
+--extra ml`. OCR confidence chain is implemented (Decision Log row "OCR",
+design §3.2/§4/§5.2): `extraction/ocr_engines.py` + `ocr_path.walk_chain` +
+`run_extract` + `ExtractHold`/migration 0007 + `api/extract.py`; verified on a
+scanned golden doc (Tesseract conf 0.946) with graceful skip of the absent
+engines. Next: validate the PaddleOCR/EasyOCR adapters + wire Docling
+confidence at pre-prod under `--extra ocr`. `main.py`/`ppt_extract.py` at repo
+root are scratch.
 
 ## Stack & layout
 

@@ -5,6 +5,7 @@ import backend.analysis.models  # noqa: F401
 import backend.api.review  # noqa: F401  (Decision model)
 import backend.audit  # noqa: F401  (register models on Base.metadata)
 import backend.auth  # noqa: F401  (User model)
+import backend.extraction.models  # noqa: F401  (ExtractHold model)
 import backend.knowledge.models  # noqa: F401
 import backend.models  # noqa: F401
 import backend.pii.models  # noqa: F401

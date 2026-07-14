@@ -10,7 +10,6 @@ event written (design doc §4).
 """
 
 import argparse
-import json
 import time
 
 from sqlalchemy import select
@@ -20,7 +19,7 @@ from backend import jobs
 from backend.analysis.service import run_analyze
 from backend.audit import ActorType, record_event
 from backend.db import get_sessionmaker
-from backend.extraction.service import extract_document
+from backend.extraction.service import run_extract
 from backend.knowledge.embedder import Embedder, get_embedder
 from backend.knowledge.service import run_index
 from backend.llm.base import LLMClient
@@ -52,27 +51,8 @@ def _get_llm() -> LLMClient:
 def handle_extract(
     session: Session, storage: RawStorage, masked: MaskedStorage, document: Document
 ) -> None:
-    data = storage.get_raw(document.raw_key)
-    artifact = extract_document(data, document.filename)
-    # Extracted text is PRE-PII-GATE: raw zone only (invariant #1).
-    artifact_key = f"{document.id}/extracted.json"
-    storage.put_raw(artifact_key, json.dumps(artifact).encode(), "application/json")
-    document.status = DocumentStatus.extracted
-    jobs.enqueue(session, document_id=document.id, stage="mask")
-    record_event(
-        session,
-        actor_type=ActorType.system,
-        actor_id="worker:extract",
-        action="stage.extracted",
-        object_type="document",
-        object_id=document.id,
-        detail={
-            "method": artifact["method"],
-            "page_count": artifact["page_count"],
-            "section_count": len(artifact["sections"]),
-            "artifact_key": artifact_key,
-        },
-    )
+    # Owns classify → OCR confidence gate → extracted | extract_hold (§3.2).
+    run_extract(session, storage, document)
 
 
 def handle_mask(

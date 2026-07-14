@@ -29,6 +29,8 @@ def _now() -> datetime:
 
 class DocumentStatus(enum.StrEnum):
     ingested = "ingested"
+    extract_hold = "extract_hold"  # OCR confidence below threshold — human resolves (§3.2)
+    failed_extract = "failed_extract"  # scan rejected at an extract_hold, or extract error
     extracted = "extracted"
     masking = "masking"
     masked = "masked"

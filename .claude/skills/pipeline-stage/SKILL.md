@@ -35,15 +35,31 @@ present evidence + a suggestion to the product owner and get confirmation
    the job, audit event written. Never swallow exceptions; never skip a
    document silently.
 
-5. **Tests before done:**
+   **Holds are not failures.** When a stage detects a *quality* problem that
+   needs human judgment (unregistered PII → `pii_hold`; all OCR engines below
+   the confidence threshold → `extract_hold`, design doc §3.2), it parks the
+   document in the hold state instead of `failed_<stage>`. A hold is resolved
+   only by an authenticated human with a mandatory rationale, the resolution
+   is audited, and nothing retries out of a hold automatically. Follow this
+   pattern for any new fail-closed check.
+
+5. **Confidence-bearing sub-engines** (OCR is the model): when a stage
+   fans out to interchangeable engines, put them behind one adapter that
+   returns `(result, confidence)` with confidence normalized to 0–1 —
+   an engine result without a confidence score is a defect. Chain order and
+   the threshold come from `CRS_` config (`CRS_OCR_ENGINE_CHAIN`,
+   `CRS_OCR_CONFIDENCE_THRESHOLD`), never hardcoded, and every engine attempt
+   is an audit event.
+
+6. **Tests before done:**
    - Unit tests for the stage logic.
    - Integration test: document enters in the prior status, leaves in the
      next status, audit rows exist, re-run is idempotent.
    - If the stage affects extraction/PII/retrieval/analysis quality, run the
      golden-set eval and compare to the previous baseline — regressions block.
 
-6. **Update docs.** If the stage's behavior deviates from design doc §3 in any
+7. **Update docs.** If the stage's behavior deviates from design doc §3 in any
    confirmed way, update the design doc in the same change.
 
-7. **Gate check.** If this stage completes a phase, run `/security-gate`
+8. **Gate check.** If this stage completes a phase, run `/security-gate`
    before declaring the phase done.

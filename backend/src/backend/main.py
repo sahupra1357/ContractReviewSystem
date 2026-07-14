@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.auth_routes import router as auth_router
+from backend.api.extract import router as extract_router
 from backend.api.ingest import router as ingest_router
 from backend.api.pii import router as pii_router
 from backend.api.review import router as review_router
@@ -19,6 +20,7 @@ app.add_middleware(  # React dev server (vite) during local development
 )
 app.include_router(auth_router)
 app.include_router(ingest_router)
+app.include_router(extract_router)
 app.include_router(pii_router)
 app.include_router(review_router)
 

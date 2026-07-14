@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     s3_bucket_audit: str = "audit"
     presidio_analyzer_url: str = "http://localhost:5002"
     presidio_anonymizer_url: str = "http://localhost:5001"
+    # OCR confidence-gated engine chain (design §3.2). Ordered cheapest-first;
+    # a page below the threshold retries the next engine, best result wins.
+    # Engines whose library isn't installed are skipped (see the `ocr` extra).
+    ocr_engine_chain: str = "tesseract,paddleocr,easyocr,docling"
+    ocr_confidence_threshold: float = 0.80
     # LLM adapter — multi-provider (design §3.5); endpoints/keys from config only
     # anthropic | bedrock | openai | nvidia | mistral | minimax | kimi | qwen
     llm_provider: str = "anthropic"

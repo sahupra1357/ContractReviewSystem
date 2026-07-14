@@ -16,6 +16,9 @@ from pypdf import PdfReader
 class Page:
     number: int  # 1-based
     text: str
+    # Set only on the OCR path (§3.2); None for born-digital fast-path pages.
+    ocr_engine: str | None = None
+    ocr_confidence: float | None = None  # 0–1, the winning engine's page score
 
 
 def extract_pdf(data: bytes) -> list[Page]:

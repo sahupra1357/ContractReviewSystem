@@ -90,8 +90,53 @@ Local Docker Compose stack, shaped 1:1 to the reviewed AWS architecture:
 ### 3.2 Extraction
 - **Classifier:** born-digital (has text layer) vs scanned.
 - **Fast path:** direct text + layout extraction (CPU).
-- **OCR path:** PaddleOCR/Docling worker container (GPU if available; CPU
-  acceptable at POC volume).
+- **OCR path — confidence-gated multi-engine chain (updated 2026-07-14 per
+  product-owner decision; supersedes single-engine Tesseract):**
+  - **Engine chain, in order:** Tesseract → PaddleOCR → EasyOCR → Docling
+    (last resort). Cheapest/CPU-lightest first; order and membership
+    configurable via `CRS_OCR_ENGINE_CHAIN`. Each engine sits behind one
+    adapter interface: `ocr(page_image) → (text, confidence)`.
+    - *MinerU excluded* (2026-07-14 owner decision): it delegates OCR to
+      PaddleOCR internally, so it adds no engine diversity over slot 2.
+    - *Docling caveat:* Docling wraps external OCR backends (default: EasyOCR)
+      rather than shipping its own recognizer, and its high-level API exposes
+      no verified per-page confidence. It is registered in the last-resort
+      slot for its layout-aware preprocessing, but the adapter currently
+      **reports itself unavailable** (and is skipped, audited) until a real
+      0–1 page confidence is wired from its backend at pre-prod — the code
+      never fabricates a score. When wired it should run the RapidOCR backend
+      (PaddleOCR-lineage) so it does not duplicate slot 3's EasyOCR verbatim.
+  - **Packaging:** the framework and the Tesseract engine ship by default;
+    PaddleOCR, EasyOCR, and Docling are the optional `ocr` extra
+    (`uv sync --extra ocr`) — heavyweight (torch/paddle), lazy-imported, and
+    skipped-with-audit when their library is absent. The default image and CI
+    stay lean; the fallback chain is exercised via fake engines in tests and
+    with the real extra at pre-prod (real-contract validation).
+  - **Confidence is mandatory.** Every engine returns a per-page confidence
+    normalized to 0–1 (Tesseract: mean word `conf` from `image_to_data`,
+    excluding `-1` non-word entries — NOT `image_to_string`, which discards
+    confidence; PaddleOCR: mean line recognition score; EasyOCR: mean
+    per-detection score; Docling: pending, see caveat above). An engine that
+    cannot produce a real confidence reports unavailable rather than emitting
+    one — a fabricated score is a defect, not a permissible output.
+  - **Per-page fallback:** a page scoring below
+    `CRS_OCR_CONFIDENCE_THRESHOLD` (default **0.80**) is re-OCR'd by the
+    next engine in the chain — only that page, not the whole document. The
+    highest-confidence result per page wins. Pages at/above threshold never
+    re-run.
+  - **All engines below threshold → `extract_hold`** (fail-closed; mirrors
+    `pii_hold`, §3.3/§4): the document halts for human resolution — accept
+    best-effort text with rationale (→ `extracted`, pipeline continues) or
+    reject the scan with rationale (→ `failed_extract`; a better scan is
+    re-uploaded as a new document). Rationale for holding: low-confidence
+    OCR mutates strings enough to slip PII past both the master-table fuzzy
+    match and the Presidio tripwire, so unreadable pages must not flow
+    toward the gate unreviewed.
+  - **Provenance:** each page records `ocr_engine` and `ocr_confidence`; the
+    artifact's `ocr` block records `min_confidence`, `low_confidence_pages`,
+    `unavailable_engines`, and per-page `attempts`. Every engine attempt
+    (engine, page, confidence, above/below threshold) is an audit event.
+  - GPU if available; CPU acceptable at POC volume.
 - **Output:** structured document — sections/clauses with stable IDs,
   page/offset provenance for citations.
 
@@ -195,20 +240,32 @@ contract decision.
 ## 4. Workflow state machine
 
 ```
-ingested → extracted → masking ─┬→ masked → indexed → analyzed → in_review
-                                │                                   │ (human, authenticated,
-                                └→ pii_hold (tripwire flag)         │  rationale required)
-                                     │ (human: add to master table  │
-                                     │  → re-mask; or dismiss       │
-                                     │  false alarm w/ rationale)   │
-                                     └──────→ masking (re-run)      │
-                                                    ┌───────────────┼────────────────┐
-                                                approved         rejected     changes_requested → (re-analyze) → in_review
+ingested ─[extract]─┬→ extracted → [mask] ─┬→ masked → indexed → analyzed → in_review
+                    │                       │                                  │ (human, authenticated,
+                    │                       └→ pii_hold (tripwire flag)        │  rationale required)
+                    │                            │ (human: add to master table │
+                    │                            │  → re-mask; or dismiss      │
+                    │                            │  false alarm w/ rationale)  │
+                    │                            └──────→ [mask] (re-run)      │
+                    │                                                          │
+                    └→ extract_hold (all OCR engines below threshold)          │
+                         │ (human, rationale required:                         │
+                         │   accept best-effort → extracted → [mask];          │
+                         │   reject scan       → failed_extract)               │
+                         └──────→ extracted (re-enter pipeline)                │
+                                             ┌────────────────────────────────┼────────────────┐
+                                         approved                         rejected      changes_requested → (re-analyze) → in_review
 ```
+(`[extract]`/`[mask]` are pipeline stages, not persisted states; a document
+lands in `extracted`/`masked`/`extract_hold`/`pii_hold`.)
 - Transitions into `approved`/`rejected` exist **only** on the
   human-decision API path. Pipeline code cannot reach them.
 - Failures at any stage → `failed_<stage>` with error detail, visible on the
   dashboard, retryable.
+- Hold states (`extract_hold`, `pii_hold`) are the fail-closed pattern: the
+  pipeline stops, a human resolves with a mandatory rationale, and the
+  resolution is audited. Holds are not failures — nothing is retried
+  automatically out of a hold.
 
 ---
 
@@ -237,6 +294,10 @@ ingested → extracted → masking ─┬→ masked → indexed → analyzed →
   table version used. Post-POC: fed automatically by vendor/customer onboarding.
 - `pii_holds` — tripwire flags: document_id, flagged span/entity type,
   resolution (added-to-master | dismissed), resolver, rationale, timestamps.
+- `extract_holds` — OCR confidence flags (§3.2), one row per low-confidence
+  page: document_id, page_number, confidence (winning read), per-engine
+  attempts (engine, confidence, status) as JSON, status (open |
+  accepted_best_effort | rejected_scan), resolved_by, rationale, timestamps.
 - `audit_events` — **append-only** (INSERT-only grants): actor (human/system),
   action, object, before/after state hash, timestamp. SOX-aware core.
 
@@ -272,7 +333,7 @@ add `AMENDS` edges in graph. No POC schema decision blocks this.
 | Postgres job table | SQS + Step Functions + EventBridge |
 | Graph-lite tables | Neptune (only if ≥3-hop need proven) |
 | Presidio container | Presidio on ECS/EKS in-VPC |
-| OCR worker container | PaddleOCR/Docling on GPU ECS/EKS |
+| OCR worker container (Tesseract→PaddleOCR→EasyOCR→Docling chain) | Same engine chain on GPU ECS/EKS; AWS Textract (managed, per-word confidence) is the candidate drop-in for chain slots at production |
 | Claude API adapter | Bedrock (Claude) via PrivateLink + Guardrails |
 | FastAPI + JWT | API Gateway + Lambda/ECS + Cognito |
 | React (Vite dev) | Amplify behind WAF + internal ALB |
@@ -294,7 +355,7 @@ add `AMENDS` edges in graph. No POC schema decision blocks this.
 | F7 | Zero auto-approval, provable | State machine has no programmatic path to approved; audit is append-only | **Feasible by construction** | — |
 | F8 | SOX-aware audit trail | Append-only event table + actor attribution + decision rationale is standard | **Feasible** | Formal SOX certification deferred (confirmed scope) |
 | F9 | Local→AWS portability | Every component chosen has a named managed equivalent (§7); adapters isolate Claude API vs Bedrock | **Feasible** | Bedrock model/feature parity to be validated in production phase |
-| F10 | 100 docs bulk + 10/day trickle on one machine | Trivial volume; heaviest step (OCR) worst-case minutes/doc on CPU | **Feasible** | None material |
+| F10 | 100 docs bulk + 10/day trickle on one machine | Trivial volume; heaviest step (OCR) worst-case minutes/doc on CPU | **Feasible** | Multi-engine fallback (§3.2) multiplies worst-case OCR time on degraded scans (up to 4 engines/page); bounded — only below-threshold pages re-run, and the all-fail path stops in `extract_hold` rather than looping |
 
 **Overall verdict: the POC is feasible as designed.** The single hardest
 target is F2 (PII recall ≥ 0.98); it is gated, measured, and backstopped —

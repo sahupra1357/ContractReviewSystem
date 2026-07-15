@@ -137,6 +137,51 @@ Local Docker Compose stack, shaped 1:1 to the reviewed AWS architecture:
     `unavailable_engines`, and per-page `attempts`. Every engine attempt
     (engine, page, confidence, above/below threshold) is an audit event.
   - GPU if available; CPU acceptable at POC volume.
+  - **Large-document handling — batched, checkpointed OCR (added 2026-07-15
+    per product-owner decision; implemented 2026-07-15).** The POC
+    corpus is small-page synthetic docs, but real contracts can run to
+    hundreds of pages. The current OCR path rasterizes the *whole* PDF into a
+    list of ~2400px page images before any recognition runs (`ocr_path.
+    _rasterize` → `walk_chain`), so peak memory grows with page count (~7 MB
+    per grayscale page → ~2 GB for a 300-page scan) and a single crash/timeout
+    re-OCRs the entire document. Fix, keeping every per-page rule and the
+    fail-closed `extract_hold` semantics unchanged:
+    - **Bounded batches.** Pages are processed in batches of
+      `CRS_OCR_BATCH_SIZE` (default **16**): rasterize the batch → run the
+      existing per-page `walk_chain` over it → **free the images** before the
+      next batch. Peak memory is `batch_size` page images, independent of
+      document length. Page numbering is preserved via the batch's start
+      offset; `walk_chain` results are unchanged (each page is independent, so
+      batching cannot alter which engine/confidence wins).
+    - **Per-batch checkpoint + resume.** Each completed batch is persisted as a
+      shard in the **raw zone** (`{document_id}/extract/batch-{start:05d}.json`,
+      pre-PII-gate — invariant #1 holds; downstream never reads shards). On
+      (re)claim of the `extract` job the worker skips any batch whose shard
+      already exists and loads it instead of re-OCRing, so a crash/timeout
+      resumes from the first missing batch rather than page 1. Shard existence
+      **is** the resume marker — no new table or migration is required. When
+      all batches are present the worker assembles the ordered page list from
+      the shards, runs `segment()` once, and writes the single final
+      `{document_id}/extracted.json` (downstream artifact shape unchanged;
+      per-doc artifact sharding is a documented pre-prod upgrade if million-page
+      inputs ever appear). Shards are retained for the POC (small text; useful
+      for debugging).
+    - **Oversized guardrail (fail-closed).** Page count is read cheaply (pdfium
+      page count, no rasterization) before batching. A document above
+      `CRS_EXTRACT_MAX_PAGES` (default **1000**) parks in **`extract_hold`**
+      with reason `oversized` — a human routes it (accept and process anyway /
+      reject) rather than a worker silently consuming unbounded time. Same hold
+      state and resolution API as the confidence hold; the hold reason
+      distinguishes them.
+    - **Audit.** One checkpoint event per batch (batch index, page range,
+      low-confidence pages so far) for progress visibility, in addition to the
+      existing per-page attempt events. At true scale, per-page attempt events
+      may be aggregated to per-batch to bound audit volume; kept per-page for
+      POC fidelity.
+    - **Fast path.** Born-digital text extraction is cheap (no rasterization),
+      so it streams page-by-page but needs no checkpointing; the
+      `CRS_EXTRACT_MAX_PAGES` guardrail still applies. Batching/checkpointing is
+      the OCR path's concern.
 - **Output:** structured document — sections/clauses with stable IDs,
   page/offset provenance for citations.
 
@@ -248,7 +293,8 @@ ingested ─[extract]─┬→ extracted → [mask] ─┬→ masked → indexed
                     │                            │  false alarm w/ rationale)  │
                     │                            └──────→ [mask] (re-run)      │
                     │                                                          │
-                    └→ extract_hold (all OCR engines below threshold)          │
+                    └→ extract_hold (all OCR engines below threshold,          │
+                    │    OR page count > CRS_EXTRACT_MAX_PAGES [oversized])     │
                          │ (human, rationale required:                         │
                          │   accept best-effort → extracted → [mask];          │
                          │   reject scan       → failed_extract)               │
@@ -298,6 +344,12 @@ lands in `extracted`/`masked`/`extract_hold`/`pii_hold`.)
   page: document_id, page_number, confidence (winning read), per-engine
   attempts (engine, confidence, status) as JSON, status (open |
   accepted_best_effort | rejected_scan), resolved_by, rationale, timestamps.
+  The batched/checkpointed OCR path (§3.2) also parks *oversized* documents
+  here (page count > `CRS_EXTRACT_MAX_PAGES`); a `reason` field distinguishes
+  `low_confidence` from `oversized`. Batch checkpoints are **not** DB rows —
+  they are shard objects in the raw zone (`{document_id}/extract/batch-*.json`)
+  and their existence is the resume marker, so no schema change is needed for
+  resumability.
 - `audit_events` — **append-only** (INSERT-only grants): actor (human/system),
   action, object, before/after state hash, timestamp. SOX-aware core.
 
@@ -356,6 +408,7 @@ add `AMENDS` edges in graph. No POC schema decision blocks this.
 | F8 | SOX-aware audit trail | Append-only event table + actor attribution + decision rationale is standard | **Feasible** | Formal SOX certification deferred (confirmed scope) |
 | F9 | Local→AWS portability | Every component chosen has a named managed equivalent (§7); adapters isolate Claude API vs Bedrock | **Feasible** | Bedrock model/feature parity to be validated in production phase |
 | F10 | 100 docs bulk + 10/day trickle on one machine | Trivial volume; heaviest step (OCR) worst-case minutes/doc on CPU | **Feasible** | Multi-engine fallback (§3.2) multiplies worst-case OCR time on degraded scans (up to 4 engines/page); bounded — only below-threshold pages re-run, and the all-fail path stops in `extract_hold` rather than looping |
+| F11 | Hundreds-of-pages single contract without OOM / timeout | Batched OCR (§3.2) caps peak memory at `CRS_OCR_BATCH_SIZE` page images regardless of length; per-batch checkpoints in the raw zone make a crash/timeout resume from the last completed batch, not page 1; `CRS_EXTRACT_MAX_PAGES` guardrail parks pathological uploads in `extract_hold` | **Feasible (implemented 2026-07-15; verified on a real 6-page scan)** | Total wall-clock on a huge degraded scan is still long — bounded by resume + the oversized cap, and intra-batch page parallelism is a pre-prod knob, not POC |
 
 **Overall verdict: the POC is feasible as designed.** The single hardest
 target is F2 (PII recall ≥ 0.98); it is gated, measured, and backstopped —

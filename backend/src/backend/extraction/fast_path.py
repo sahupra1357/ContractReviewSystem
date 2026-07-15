@@ -21,6 +21,13 @@ class Page:
     ocr_confidence: float | None = None  # 0–1, the winning engine's page score
 
 
+def pdf_page_count(data: bytes) -> int:
+    """Page count without rendering — drives the oversized guardrail (§3.2).
+    Uses pypdf (a base dependency) so the guardrail never pulls in the heavy
+    OCR extra for born-digital documents."""
+    return len(PdfReader(io.BytesIO(data)).pages)
+
+
 def extract_pdf(data: bytes) -> list[Page]:
     reader = PdfReader(io.BytesIO(data))
     return [

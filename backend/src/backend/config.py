@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     # Engines whose library isn't installed are skipped (see the `ocr` extra).
     ocr_engine_chain: str = "tesseract,paddleocr,easyocr,docling"
     ocr_confidence_threshold: float = 0.80
+    # Large-document handling (design §3.2): OCR runs in bounded page batches so
+    # peak memory is one batch of rasterized images, not the whole document; a
+    # completed batch is checkpointed so a crash resumes mid-document. Documents
+    # above the page cap park in extract_hold (reason "oversized") for a human.
+    ocr_batch_size: int = 16
+    extract_max_pages: int = 1000
     # LLM adapter — multi-provider (design §3.5); endpoints/keys from config only
     # anthropic | bedrock | openai | nvidia | mistral | minimax | kimi | qwen
     llm_provider: str = "anthropic"

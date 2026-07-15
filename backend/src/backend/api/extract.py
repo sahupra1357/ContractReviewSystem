@@ -19,7 +19,11 @@ from backend import jobs
 from backend.audit import ActorType, record_event
 from backend.auth import ReviewerActor
 from backend.db import get_db
-from backend.extraction.models import ExtractHold, ExtractHoldStatus
+from backend.extraction.models import (
+    ExtractHold,
+    ExtractHoldReason,
+    ExtractHoldStatus,
+)
 from backend.models import Document, DocumentStatus
 
 router = APIRouter(prefix="/extract", tags=["extract"])
@@ -28,6 +32,7 @@ router = APIRouter(prefix="/extract", tags=["extract"])
 class ExtractHoldOut(BaseModel):
     id: int
     document_id: str
+    reason: str
     page_number: int
     confidence: float | None
     attempts: list[dict[str, Any]] | None
@@ -120,6 +125,24 @@ def resolve_hold(
             object_type="document",
             object_id=document.id,
             detail={"reason": "scan rejected at extract_hold", "after_hold": hold.id},
+        )
+        session.commit()
+        return hold
+
+    if hold.reason == ExtractHoldReason.oversized:
+        # Human OK'd processing the oversized document: re-run extraction with
+        # the page cap lifted. run_extract sees this accepted oversized hold and
+        # passes max_pages=0; the batched/checkpointed path bounds memory.
+        document.status = DocumentStatus.ingested
+        jobs.enqueue(session, document_id=document.id, stage="extract")
+        record_event(
+            session,
+            actor_type=ActorType.system,
+            actor_id="extract-holds-api",
+            action="stage.extract_requeued",
+            object_type="document",
+            object_id=document.id,
+            detail={"after_hold": hold.id, "reason": "oversized_accepted"},
         )
         session.commit()
         return hold

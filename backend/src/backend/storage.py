@@ -40,6 +40,8 @@ class RawStorage(Protocol):
 
     def get_raw(self, key: str) -> bytes: ...
 
+    def has_raw(self, key: str) -> bool: ...
+
 
 class MaskedStorage(Protocol):
     """The masked zone — written ONLY by the mask stage; the ONLY zone
@@ -61,6 +63,17 @@ class S3RawStorage:
     def get_raw(self, key: str) -> bytes:
         response = self._client.get_object(Bucket=self._bucket, Key=key)
         return response["Body"].read()
+
+    def has_raw(self, key: str) -> bool:
+        # Existence of a batch checkpoint shard is the resume marker for the
+        # batched OCR path (design §3.2) — no DB row needed.
+        try:
+            self._client.head_object(Bucket=self._bucket, Key=key)
+        except botocore.exceptions.ClientError as exc:
+            if exc.response.get("Error", {}).get("Code", "") in ("404", "NoSuchKey"):
+                return False
+            raise
+        return True
 
 
 class S3MaskedStorage:

@@ -18,6 +18,9 @@ class FakeRawStorage:
     def get_raw(self, key: str) -> bytes:
         return self.objects[key]
 
+    def has_raw(self, key: str) -> bool:
+        return key in self.objects
+
 
 class FakeMaskedStorage:
     """Separate object from raw storage on purpose — tests assert the zones

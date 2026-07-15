@@ -27,11 +27,20 @@ class ExtractHoldStatus(enum.StrEnum):
     rejected_scan = "rejected_scan"                # human rejected → failed_extract
 
 
+class ExtractHoldReason(enum.StrEnum):
+    low_confidence = "low_confidence"  # every engine scored this page below threshold
+    oversized = "oversized"            # doc page count > CRS_EXTRACT_MAX_PAGES (§3.2)
+
+
 class ExtractHold(Base):
     __tablename__ = "extract_holds"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     document_id: Mapped[str] = mapped_column(String(32), index=True)
+    # low_confidence holds carry the flagged page; oversized holds use page 0.
+    reason: Mapped[str] = mapped_column(
+        String(30), default=ExtractHoldReason.low_confidence
+    )
     page_number: Mapped[int] = mapped_column(Integer)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)  # winning read, 0–1
     # per-engine attempts for this page: [{"engine","confidence","status"}]

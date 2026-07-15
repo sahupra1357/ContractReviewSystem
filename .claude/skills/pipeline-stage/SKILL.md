@@ -51,15 +51,36 @@ present evidence + a suggestion to the product owner and get confirmation
    `CRS_OCR_CONFIDENCE_THRESHOLD`), never hardcoded, and every engine attempt
    is an audit event.
 
-6. **Tests before done:**
+6. **Large inputs — batch and checkpoint, never materialize the whole thing.**
+   A stage that fans out over pages/chunks (OCR is the model, design doc §3.2)
+   must not load an entire multi-hundred-page document into memory at once.
+   Follow the batched/checkpointed pattern:
+   - Process in bounded batches sized from `CRS_` config (`CRS_OCR_BATCH_SIZE`);
+     free each batch's heavy objects (rasterized images) before the next.
+     Peak memory must be one batch, not the whole document.
+   - Persist each completed batch as a **raw-zone** shard
+     (`{document_id}/<stage>/batch-{start:05d}.json`, pre-PII-gate — invariant
+     #1 still holds; downstream never reads shards). On job re-claim, skip and
+     load batches whose shard already exists — this is what makes a crash/
+     timeout resume from the last batch instead of re-running from the start,
+     and it needs no new table (shard existence is the resume marker). Keep the
+     final assembled artifact's shape unchanged so downstream stages don't move.
+   - Add a fail-closed guardrail for pathological sizes: over
+     `CRS_EXTRACT_MAX_PAGES` → `extract_hold` (reason `oversized`), same hold
+     mechanics as §4, never a silent unbounded run.
+   - Emit one checkpoint audit event per batch (in addition to per-item events)
+     so progress is observable; keep results deterministic (preserve
+     page/item order via the batch's start offset).
+
+7. **Tests before done:**
    - Unit tests for the stage logic.
    - Integration test: document enters in the prior status, leaves in the
      next status, audit rows exist, re-run is idempotent.
    - If the stage affects extraction/PII/retrieval/analysis quality, run the
      golden-set eval and compare to the previous baseline — regressions block.
 
-7. **Update docs.** If the stage's behavior deviates from design doc §3 in any
+8. **Update docs.** If the stage's behavior deviates from design doc §3 in any
    confirmed way, update the design doc in the same change.
 
-8. **Gate check.** If this stage completes a phase, run `/security-gate`
+9. **Gate check.** If this stage completes a phase, run `/security-gate`
    before declaring the phase done.

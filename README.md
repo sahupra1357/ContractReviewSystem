@@ -47,32 +47,61 @@ docker compose up -d --build          # Postgres+pgvector, MinIO, Presidio, API,
 |---|---|
 | API + React UI | http://localhost:8000 |
 | API docs | http://localhost:8000/docs |
-| MinIO console | http://localhost:9001 |
+| Health check | http://localhost:8000/health |
+| MinIO console | http://localhost:9001 (`minioadmin` / `minioadmin`) |
 | Postgres | `localhost:5433` (5432 is left to a local Homebrew Postgres) |
+| Presidio analyzer / anonymizer | `localhost:5002` / `localhost:5001` |
 
-Migrations run automatically on backend boot. Then seed accounts:
+Migrations run automatically on backend boot (`alembic upgrade head` is the
+container's entrypoint, and a failing migration fails the container).
+
+Then seed — **one command does everything**:
 
 ```bash
-cd backend && uv run python -m backend.seed_users     # reviewer1, reviewer2, admin1
-uv run python -m backend.seed_demo                    # optional demo corpus
+cd backend && uv run python -m backend.seed_demo
 ```
 
-Log in at http://localhost:8000, upload contracts, and watch them move through
-the pipeline. The full walkthrough is `docs/demo_script.md`.
+`seed_demo` is idempotent and seeds all three things the system needs:
+demo users, the **PII master table**, and the 22-contract synthetic corpus.
+
+If you seed by hand instead, you need all three steps — the master table is
+not optional. Without it every document halts in `pii_hold`, because the
+master table is the only masking authority:
+
+```bash
+uv run python -m backend.seed_users                              # reviewer1, reviewer2, admin1
+uv run python -m backend.pii.seed ../golden_set/master_table_seed.yaml
+# …then upload contracts through the UI or POST /ingest/upload
+```
+
+Passwords come from `CRS_DEMO_PASSWORD` (default `demo1234` — POC only).
+
+Log in at http://localhost:8000 and watch documents move through the pipeline.
+Documents carrying *novel* PII deliberately halt in `pii_hold` for resolution
+in the PII Admin screen — that is the designed behaviour, and the centrepiece
+of the demo. The full walkthrough is `docs/demo_script.md`.
 
 ### Working on the code
 
 ```bash
 # backend/
-uv sync                                   # add --extra ml for embeddings, --extra ocr for fallback engines
-uv run ruff check .
-uv run pytest -q                          # unit tests
-CRS_RUN_INVARIANT_TESTS=1 uv run pytest -m invariant   # needs compose Postgres up
-uv run alembic upgrade head
+uv sync                                   # --extra ml for embeddings, --extra ocr for fallback OCR engines
+uv run ruff check .                       # ruff, line-length 100, rules E/F/I/UP/B
+uv run pytest -q                          # 81 unit tests (invariant tests skip without Postgres)
+CRS_RUN_INVARIANT_TESTS=1 uv run pytest   # full suite; needs compose Postgres + migrations
+uv run alembic upgrade head               # migrations 0001–0008
 
 # frontend/
-npm install && npm run dev                # Vite dev server
-npm run build
+npm install && npm run dev                # Vite dev server on :5173 (CORS-allowed by the API)
+npm run lint                              # oxlint
+npm run build                             # tsc -b && vite build
+```
+
+Regenerate the synthetic corpus (deterministic, seeded — same output every
+run; never hand-edit generated documents):
+
+```bash
+cd backend && uv run python ../golden_set/generator/generate.py
 ```
 
 ---
@@ -175,6 +204,7 @@ These are enforced in code and covered by `backend/tests/invariants/`:
 
 | Route | Purpose |
 |---|---|
+| `GET /health` | Liveness + environment name; the compose healthcheck |
 | `POST /auth/login` | JWT issue (roles: reviewer, admin; Cognito-shaped seam in `auth.py`) |
 | `POST /ingest/upload` | Authenticated multi-file upload |
 | `GET /extract/holds` · `POST /extract/holds/{id}/resolve` | Resolve OCR-confidence and oversized holds |
@@ -185,7 +215,24 @@ These are enforced in code and covered by `backend/tests/invariants/`:
 | `POST /review/contracts/{id}/decision` | **The only path to a terminal decision** |
 | `GET /review/contracts/{id}/audit` · `GET /review/metrics` | Audit trail and dashboard metrics |
 
-Interactive docs at `/docs` when the stack is running.
+Interactive docs at `/docs` when the stack is running. Every route except
+`/health` and `/auth/login` requires a bearer token. Role gates:
+
+| Role | Can reach |
+|---|---|
+| **reviewer** | all of `/extract/*`, `/review/claim`, `/review/decision` |
+| **admin** | all of `/pii/*` — holds *and* master table |
+| either | read-only review routes (`/queue`, contract detail, audit, metrics) and upload |
+
+Roles are **strictly exclusive**, not hierarchical (`require_role` compares
+for equality). An admin cannot approve a contract, and a reviewer cannot open
+PII Admin — so a demo walkthrough that touches both needs two logins
+(`reviewer1` and `admin1`).
+
+Pull-based sources are not wired in the POC, but the seam exists: implement
+`SourceConnector` (`ingestion/connectors.py`) with `poll() → fetch() → ack()`
+and a runner hands bytes to the same `ingest_document()` the upload route
+uses — zero changes to the ingestion core. See `/add-connector`.
 
 ---
 
@@ -205,7 +252,12 @@ All settings use the `CRS_` env prefix (`backend/src/backend/config.py`).
 | `CRS_LLM_PROVIDER` | `anthropic` | `bedrock` for production; OpenAI-compatible: `openai`, `nvidia`, `mistral`, `minimax`, `kimi`, `qwen` |
 | `CRS_LLM_MODEL_STRONG` / `CRS_LLM_MODEL_FAST` | provider default | tiered routing |
 | `CRS_LLM_API_KEY` / `CRS_LLM_BASE_URL` | unset | **config only — never hardcoded** |
-| `CRS_JWT_SECRET` | dev value | POC only; Cognito in production |
+| `CRS_AWS_REGION` | `us-east-1` | bedrock provider only |
+| `CRS_JWT_SECRET` | `dev-secret-change-me` | POC only; Cognito in production |
+| `CRS_DEMO_PASSWORD` | `demo1234` | password for the seeded demo users; POC only |
+| `CRS_STATIC_DIR` | unset | built React UI; set to `/app/static` in the image |
+| `CRS_ENVIRONMENT` | `local` | reported by `/health`; compose sets `compose` |
+| `CRS_RUN_INVARIANT_TESTS` | unset | set to `1` to run the invariant suite |
 
 **LLM credentials.** Containers use the direct API with the read-only `ant`
 profile mount. Host-side runs may point at the loopback proxy with
@@ -223,27 +275,80 @@ label schema) generated by `golden_set/generator/generate.py`. Evals:
 cd backend
 uv run python -m backend.eval.extraction_eval    # G2
 uv run python -m backend.eval.pii_eval           # G3
-uv run python -m backend.eval.index_golden       # G4 (index the corpus)
+uv run python -m backend.eval.index_golden       # G4 (index the corpus first)
 uv run python -m backend.eval.retrieval_eval     # G4
 uv run python -m backend.eval.analysis_eval      # G5 — needs LLM credentials
 ```
 
 ---
 
+## Implementation notes
+
+Details that are easy to miss when reading the code for the first time:
+
+| Area | Note |
+|---|---|
+| **Storage seam** | `storage.py` exposes two separate Protocols, `RawStorage` and `MaskedStorage`. The worker hands `index` and `analyze` **only** the masked handle — invariant #1 is enforced by the type seam, not by convention |
+| **Job queue** | Postgres-backed (`jobs.py`, `SELECT … FOR UPDATE SKIP LOCKED`), claimed by stage. Maps to SQS in production. Run the worker once with `python -m backend.worker --once` to drain and exit |
+| **Terminal guard** | `worker.py` skips any document already `approved`/`rejected` and writes a `stage.skipped_terminal` audit event — found by the Phase-7 LLM-down drill |
+| **Chunking** | `MAX_CHUNK_CHARS = 4000`, split on clause sections |
+| **Embeddings** | `BAAI/bge-m3`, normalized, loaded lazily; ~2.3 GB of weights download once into the `hfcache` volume. A deterministic hash embedder stands in for tests |
+| **Retrieval** | Dense (pgvector cosine) + sparse (Postgres `ts_rank` / `websearch_to_tsquery`) fused with Reciprocal Rank Fusion, `RRF_K = 60`. `retrieval_eval --rerank` evaluates the optional reranker |
+| **Template diff** | `FAMILY_MIN_SCORE = 0.5` to claim a family, `DEVIATION_THRESHOLD = 0.70`, `STANDARD_THRESHOLD = 0.85`, heading match fuzzed at `0.8` for OCR tolerance |
+| **Groundedness** | Findings whose `citation` is not a real chunk id are **dropped before display**, never shown and never repaired. Prompts are versioned (`PROMPT_VERSION`) |
+| **Injection defence** | Contract text is data, never instruction: `_INJECTION_PATTERNS` in `analysis/service.py` raises a cited high-severity finding rather than acting on the text |
+| **PII tripwire** | Presidio findings below `_PRESIDIO_MIN_SCORE = 0.5` are ignored, matches already inside a `[TYPE-N]` placeholder are skipped, and local regex recognizers run alongside Presidio |
+| **PII tables** | `pii_known_entities` (the master table), `pii_entity_map` (per-document placeholder → original, tagged `registered` or `tripwire-added`), `pii_holds` |
+| **Auth** | pbkdf2-sha256 at 200k iterations, HS256 JWT, 12-hour TTL. `get_actor` is the single dependency every route imports, so the Cognito swap touches one module |
+
+## Testing & CI
+
+```
+backend/tests/                 81 unit tests — extraction, OCR chain, large docs,
+                               PII masker/tripwire/gate, knowledge, analysis,
+                               ingestion, upload + review APIs, worker, connectors
+backend/tests/invariants/      security invariants; require the compose Postgres
+                               and only run with CRS_RUN_INVARIANT_TESTS=1
+```
+
+`.github/workflows/ci.yml` runs on every PR and on pushes to `main`: ruff →
+`alembic upgrade head` → the **full** suite including invariants against a
+`pgvector/pgvector:pg16` service container, plus a Node 22 frontend build.
+
+## Container image
+
+`backend/Dockerfile` is multi-stage and built from the **repo root** as context:
+a Node 22 stage builds the React SPA into `/app/static`, the Python stage
+installs `.[ml]`, apt-installs `tesseract-ocr`, and copies `golden_set/` in so
+`seed_demo` works inside the container. The entrypoint runs migrations and
+then uvicorn. The `worker` service reuses the same image with
+`python -m backend.worker`.
+
 ## Layout
 
 ```
-backend/     FastAPI app + pipeline (uv project) — api/, extraction/, pii/,
-             knowledge/, analysis/, llm/, eval/, alembic/, tests/
-frontend/    React SPA (Vite + TypeScript), served from the backend image
-golden_set/  Synthetic labeled eval corpus + generator
-docs/        Design document, SDLC plan, gate reports, demo script, deploy guides
-scripts/     EC2 bootstrap
-docker-compose.yml   The single environment definition
+backend/src/backend/
+  api/          route modules — auth_routes, ingest, extract, pii, review
+  ingestion/    connectors.py (SourceConnector interface), core.py (dedup + registry)
+  extraction/   classifier, fast_path, ocr_engines, ocr_path, segmenter, service
+  pii/          masker (the only masking component), tripwire, seed, models, service
+  knowledge/    chunker, embedder, retrieval (RRF), graph, service
+  analysis/     template_diff, prompts, reference_templates, service
+  llm/          base.py (client protocol) + providers.py (multi-provider adapter)
+  eval/         golden-set evaluations, one per gate
+  auth.py · audit.py · jobs.py · worker.py · storage.py · db.py · models.py · config.py
+backend/alembic/versions/   0001 audit_events → 0008 extract_hold_reason
+frontend/src/pages/         Login, Dashboard, Queue, Contract, Upload, PiiAdmin
+golden_set/                 synthetic corpus, generator/, master_table_seed.yaml
+docs/                       design doc, SDLC plan, gate reports, demo script, deploy guides
+.claude/skills/             project skills — pipeline-stage, add-connector,
+                            security-gate, demo-prep, unit-tests, self-evaluate
+scripts/ec2-user-data.sh    EC2 bootstrap
+docker-compose.yml          the single environment definition
 ```
 
-`main.py` and `ppt_extract.py` at the repo root are scratch files, not part of
-the system.
+`main.py` at the repo root is a scratch file, not part of the system.
+`frontend/README.md` is still the stock Vite template.
 
 ---
 
@@ -257,8 +362,12 @@ Read in this order:
 3. `docs/01_brainstorm_and_improvements.md` — rationale for deviations from the
    original security review.
 4. `project_document/AI_Contract_CoPilot_Security_Review.txt` — original
-   security architecture (the production north star).
-5. `CLAUDE.md` — working agreements, decision log, and agent guidance.
+   security architecture (the production north star). **Not in the
+   repository** — `project_document/` is gitignored, so this one is
+   distributed out of band.
+5. `CLAUDE.md` — working agreements, the confirmed Decision Log, and agent
+   guidance.
+6. `docs/pipeline_flow.md` — process-flow diagrams for the whole system.
 
 Deployment guides: `docs/deploy_aws_ec2.md`, `docs/deploy_render.md` (both
 synthetic-data-only demo environments).

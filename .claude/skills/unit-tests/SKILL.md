@@ -22,7 +22,13 @@ not done, even if it works.
 - No network in unit tests: LLM calls go through the Bedrock-shaped adapter —
   substitute a fake adapter returning canned, citation-bearing responses.
   Presidio/OCR get service fakes in unit tests; real containers only in
-  integration tests.
+  integration tests. OCR fakes implement the engine adapter contract —
+  `ocr(page_image) → (text, confidence)` with confidence normalized 0–1 —
+  so the confidence-threshold fallback chain (design doc §3.2) is testable
+  without any OCR binary: fakes with scripted per-page confidences must
+  cover (a) first engine passes, no fallback; (b) low page falls through
+  the chain and the highest-confidence result wins; (c) all engines below
+  threshold → `extract_hold` with per-attempt audit events.
 - Determinism: no sleeps, no time-dependent assertions; freeze time where
   timestamps matter (audit events).
 

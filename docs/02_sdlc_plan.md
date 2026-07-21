@@ -55,9 +55,15 @@ Total: **~8–10 weeks** to demo-ready.
 - Born-digital classifier → fast path (direct text) vs OCR path
   (PaddleOCR/Docling in a worker container).
 - Layout-aware extraction: clause/section structure preserved.
+- **Large-document handling (design doc §3.2, added 2026-07-15):** batched,
+  checkpointed OCR — bounded peak memory (`CRS_OCR_BATCH_SIZE`), per-batch
+  resume shards, `CRS_EXTRACT_MAX_PAGES` oversized guardrail → `extract_hold`.
 - **GATE G2:** extraction accuracy on golden set meets threshold (target
   ≥95% text fidelity on born-digital, ≥90% on scans); clause boundaries
-  correct on sampled review.
+  correct on sampled review. **Large-doc check:** a multi-hundred-page scan
+  extracts with peak memory bounded to ~`CRS_OCR_BATCH_SIZE` pages, and a
+  worker killed mid-document resumes from the last checkpoint (no full
+  re-OCR); an over-cap document parks in `extract_hold` (reason `oversized`).
 
 ### Phase 3 — PII gate (Weeks 4–5)
 - **Deterministic masking (the only masking authority):** driven by the

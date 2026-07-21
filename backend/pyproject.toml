@@ -31,6 +31,15 @@ dependencies = [
 ml = [
     "sentence-transformers>=5.6.0",
 ]
+# OCR fallback engines (design §3.2). Heavyweight (torch/paddle); NOT in the
+# default image — Tesseract ships by default and the adapters lazy-import
+# these, skipping gracefully when absent. Install where the chain is exercised
+# (pre-prod / GPU worker): `uv sync --extra ocr`.
+ocr = [
+    "easyocr>=1.7.2",
+    "paddleocr>=2.7.0",
+    "docling>=2.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]

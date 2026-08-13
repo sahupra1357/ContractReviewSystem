@@ -14,6 +14,8 @@ project_document/*
 # Environment / secrets — never commit credentials
 .env
 .env.*
+# ...except the reference template: all keys commented out, no values
+!.env.example
 
 # Tool caches
 .serena/

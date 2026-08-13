@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from backend import jobs
 from backend.analysis.service import run_analyze
 from backend.audit import ActorType, record_event
+from backend.config import require_valid_deployment_config
 from backend.db import get_sessionmaker
 from backend.extraction.service import run_extract
 from backend.knowledge.embedder import Embedder, get_embedder
@@ -142,6 +143,7 @@ def process_one(
 
 
 def run(once: bool) -> None:
+    require_valid_deployment_config()
     sessionmaker = get_sessionmaker()
     storage = S3RawStorage()
     masked = S3MaskedStorage()

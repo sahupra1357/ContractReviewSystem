@@ -62,3 +62,59 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# Environments where the development defaults are the correct answer. Compose
+# counts: it is the local stack, and it deliberately relies on the MinIO and
+# JWT dev defaults. Anything else — render-*, aws, prod — is a real deployment
+# and must supply its own values.
+DEV_ENVIRONMENTS = frozenset({"local", "compose"})
+
+# Settings whose dev default is unsafe or simply wrong off-box: pointing at
+# localhost, or the well-known dev credential.
+_REQUIRED_OUTSIDE_DEV = (
+    "database_url",
+    "s3_endpoint_url",
+    "s3_access_key",
+    "s3_secret_key",
+    "presidio_analyzer_url",
+    "jwt_secret",
+)
+
+
+def deployment_config_problems(settings: Settings | None = None) -> list[str]:
+    """Settings a real deployment must override but hasn't.
+
+    Without this, a missing CRS_DATABASE_URL on a hosted platform silently
+    dials localhost:5433 and fails with a confusing connection error, and a
+    missing CRS_JWT_SECRET silently signs tokens with the published dev
+    secret — a security hole that looks like a working system.
+
+    Defaults are read from the field definitions, so this cannot drift.
+    """
+    settings = settings or get_settings()
+    if settings.environment in DEV_ENVIRONMENTS:
+        return []
+
+    problems = [
+        f"CRS_{name.upper()} is still the development default"
+        for name in _REQUIRED_OUTSIDE_DEV
+        if getattr(settings, name) == Settings.model_fields[name].default
+    ]
+    if settings.embedding_provider == "openai" and not settings.embedding_api_key:
+        problems.append("CRS_EMBEDDING_PROVIDER=openai but CRS_EMBEDDING_API_KEY is unset")
+    return problems
+
+
+def require_valid_deployment_config(settings: Settings | None = None) -> None:
+    """Refuse to start rather than run a half-configured deployment."""
+    problems = deployment_config_problems(settings)
+    if problems:
+        settings = settings or get_settings()
+        raise RuntimeError(
+            f"Refusing to start: CRS_ENVIRONMENT={settings.environment!r} is not a "
+            f"development environment, but required configuration is missing:\n"
+            + "\n".join(f"  - {p}" for p in problems)
+            + "\nSet these in the platform's environment (see .env.example), or use "
+            f"CRS_ENVIRONMENT in {sorted(DEV_ENVIRONMENTS)} for local work."
+        )

@@ -239,6 +239,10 @@ uses — zero changes to the ingestion core. See `/add-connector`.
 ## Configuration
 
 All settings use the `CRS_` env prefix (`backend/src/backend/config.py`).
+**`.env.example` is the full annotated reference** — every key with its
+default, grouped by what you'd switch on (Cloudflare R2, Modal, OpenAI
+embeddings, in-process pipeline). Copy it to `backend/.env` for local runs, or
+use it as the checklist when filling in a hosting dashboard.
 
 | Variable | Default | Notes |
 |---|---|---|

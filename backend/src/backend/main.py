@@ -10,7 +10,7 @@ from backend.api.extract import router as extract_router
 from backend.api.ingest import router as ingest_router
 from backend.api.pii import router as pii_router
 from backend.api.review import router as review_router
-from backend.config import get_settings
+from backend.config import get_settings, require_valid_deployment_config
 
 DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
@@ -28,6 +28,9 @@ def allowed_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Fail loudly on a half-configured deployment rather than silently dialling
+    # localhost or signing tokens with the published dev secret.
+    require_valid_deployment_config()
     # Hosts without a worker tier run the same pipeline loop in-process
     # (CRS_INLINE_WORKER=1). Off by default: compose and AWS run a real worker.
     if get_settings().inline_worker:

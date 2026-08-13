@@ -20,12 +20,12 @@ import sys
 
 import yaml
 
+from backend.config import get_settings
 from backend.eval.extraction_eval import GOLDEN
 from backend.extraction.service import extract_document
 from backend.pii.masker import _entity_pattern, mask_text
 from backend.pii.tripwire import detect
 
-ANALYZER_URL = "http://localhost:5002"
 RECALL_THRESHOLD = 0.98
 
 
@@ -52,7 +52,7 @@ def evaluate() -> int:
 
         artifact = extract_document(data, labels["filename"])
         masked_text, _ = mask_text(artifact["full_text"], master)
-        flags = detect(masked_text, analyzer_url=ANALYZER_URL)
+        flags = detect(masked_text, analyzer_url=get_settings().presidio_analyzer_url)
         halted = bool(flags)
 
         if labels["has_novel_pii"]:

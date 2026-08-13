@@ -244,7 +244,12 @@ All settings use the `CRS_` env prefix (`backend/src/backend/config.py`).
 |---|---|---|
 | `CRS_DATABASE_URL` | local Postgres on 5433 | → Aurora PostgreSQL + pgvector |
 | `CRS_S3_ENDPOINT_URL` / `CRS_S3_BUCKET_*` | MinIO, `raw`/`masked`/`audit` | → S3 + KMS |
+| `CRS_S3_REGION` | `us-east-1` | MinIO ignores it; Cloudflare R2 needs `auto` |
 | `CRS_PRESIDIO_*_URL` | local analyzer/anonymizer | detector-only tripwire |
+| `CRS_EMBEDDING_PROVIDER` | `bge-m3` | design default (self-hosted); `openai` for hosts without torch, `hash` for tests |
+| `CRS_EMBEDDING_MODEL` | provider default | `openai` → `text-embedding-3-small`, requested at 1024 dims |
+| `CRS_EMBEDDING_API_KEY` / `CRS_EMBEDDING_BASE_URL` | unset | **config only — never hardcoded** |
+| `CRS_INLINE_WORKER` | `0` | `1` runs the pipeline loop inside the API process (hosts with no worker tier) |
 | `CRS_OCR_ENGINE_CHAIN` | `tesseract,paddleocr,easyocr,docling` | ordered cheapest-first |
 | `CRS_OCR_CONFIDENCE_THRESHOLD` | `0.80` | below → next engine, then `extract_hold` |
 | `CRS_OCR_BATCH_SIZE` | `16` | pages rasterized at once |
@@ -369,8 +374,9 @@ Read in this order:
    guidance.
 6. `docs/pipeline_flow.md` — process-flow diagrams for the whole system.
 
-Deployment guides: `docs/deploy_aws_ec2.md`, `docs/deploy_render.md` (both
-synthetic-data-only demo environments).
+Deployment guides: `docs/deploy_aws_ec2.md`, `docs/deploy_render.md`, and
+`docs/deploy_vercel_render.md` (free-tier: Vercel + Render + Cloudflare R2 +
+Modal). All are synthetic-data-only demo environments.
 
 ---
 

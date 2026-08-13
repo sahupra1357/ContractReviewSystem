@@ -68,7 +68,7 @@ services:
       CRS_ENVIRONMENT: compose
       CRS_JWT_SECRET: ${CRS_JWT_SECRET:-dev-secret-change-me}
     ports:
-      - "8000:8000"
+      - "8001:8000"   # host 8001 → container 8000 (uvicorn's port, set in the Dockerfile)
     depends_on:
       postgres:
         condition: service_healthy

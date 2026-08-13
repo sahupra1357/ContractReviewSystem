@@ -10,7 +10,10 @@ event written (design doc §4).
 """
 
 import argparse
+import sys
+import threading
 import time
+import traceback
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -153,6 +156,67 @@ def run(once: bool) -> None:
             return
         if not worked:
             time.sleep(POLL_INTERVAL_SECONDS)
+
+
+INLINE_RETRY_SECONDS = 5.0
+INLINE_RETRY_MAX_SECONDS = 60.0
+
+
+def supervise(*, run_fn=None, sleep_fn=time.sleep, max_restarts: int | None = None) -> int:
+    """Restart the loop if it raises, with backoff. Returns restarts performed.
+
+    A standalone worker can let an exception kill the process — the container
+    restarts it. An in-process loop cannot: the thread would die while the API
+    kept answering /health, leaving a silently dead pipeline. Failures are
+    always printed to stderr (Render/compose capture it) — never swallowed.
+    """
+    run_fn = run_fn or (lambda: run(False))
+    delay = INLINE_RETRY_SECONDS
+    restarts = 0
+    while max_restarts is None or restarts < max_restarts:
+        try:
+            run_fn()
+            return restarts   # only reachable if the loop ever returns
+        except Exception:  # noqa: BLE001 — the supervisor must survive anything
+            traceback.print_exc()
+            print(
+                f"[inline-worker] pipeline loop crashed; restarting in {delay:.0f}s",
+                file=sys.stderr,
+                flush=True,
+            )
+            sleep_fn(delay)
+            delay = min(delay * 2, INLINE_RETRY_MAX_SECONDS)
+            restarts += 1
+    return restarts
+
+
+def start_inline(sessionmaker=None) -> threading.Thread:
+    """Run the pipeline loop in a daemon thread inside the API process.
+
+    For hosts with no worker tier (the free-tier demo). The stages, handlers and
+    audit writes are byte-for-byte the ones the standalone worker runs — this
+    changes only *where* the loop lives, never what it does.
+
+    Two consequences worth knowing: the loop dies with the web process (so a
+    host that idles the process out stops the pipeline until the next request),
+    and orphaned `running` jobs are requeued at start, which assumes a single
+    instance. Both are why this is off by default.
+    """
+    sessionmaker = sessionmaker or get_sessionmaker()
+    with sessionmaker() as session:
+        orphans = jobs.requeue_orphaned(session)
+        for job in orphans:
+            record_event(
+                session, actor_type=ActorType.system, actor_id="worker:inline",
+                action="job.requeued_orphaned", object_type="document",
+                object_id=job.document_id,
+                detail={"stage": job.stage, "job_id": job.id, "attempts": job.attempts},
+            )
+        session.commit()
+
+    thread = threading.Thread(target=supervise, name="crs-inline-worker", daemon=True)
+    thread.start()
+    return thread
 
 
 if __name__ == "__main__":

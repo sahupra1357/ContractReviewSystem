@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
+    # boto3 requires a region even for S3-compatible stores. MinIO ignores it;
+    # Cloudflare R2 requires the literal "auto".
+    s3_region: str = "us-east-1"
     s3_bucket_raw: str = "raw"
     s3_bucket_masked: str = "masked"
     s3_bucket_audit: str = "audit"
@@ -26,6 +29,15 @@ class Settings(BaseSettings):
     # above the page cap park in extract_hold (reason "oversized") for a human.
     ocr_batch_size: int = 16
     extract_max_pages: int = 1000
+    # Embedding adapter (design §3.4). "bge-m3" is the design's self-hosted
+    # default and stays the default everywhere; "openai" exists for hosts too
+    # small to run torch (the free-tier Render demo). model_name partitions the
+    # embedding cache and the dense-retrieval filter, so vectors from different
+    # providers can never be compared against each other.
+    embedding_provider: str = "bge-m3"   # bge-m3 | openai | hash
+    embedding_model: str | None = None   # None → provider default
+    embedding_api_key: str | None = None
+    embedding_base_url: str | None = None  # OpenAI-compatible endpoints
     # LLM adapter — multi-provider (design §3.5); endpoints/keys from config only
     # anthropic | bedrock | openai | nvidia | mistral | minimax | kimi | qwen
     llm_provider: str = "anthropic"
@@ -36,6 +48,14 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"        # bedrock only
     jwt_secret: str = "dev-secret-change-me"  # POC only; Cognito in production
     static_dir: str | None = None  # built React UI (set in the container image)
+    # Browser origins allowed to call the API, comma-separated — needed when the
+    # SPA is hosted apart from the API (e.g. Vercel). The local Vite dev origins
+    # are always allowed; this adds to them.
+    cors_allow_origins: str = ""
+    # Run the pipeline loop inside the API process instead of a separate worker
+    # service. Off by default (compose/AWS run a real worker); on for hosts with
+    # no worker tier. Assumes ONE instance — see worker.start_inline().
+    inline_worker: bool = False
     environment: str = "local"
 
 

@@ -1,0 +1,92 @@
+# Render Blueprint — FREE-TIER demo variant.
+#
+# render.yaml (next to this file) stays the faithful, full-fidelity deployment
+# and is what a real cloud rollout uses. This variant exists only because
+# Render's free tier has no worker tier, no private services and no disks, so
+# the four services that need them are relocated:
+#
+#   crs-worker             -> in-process thread   (CRS_INLINE_WORKER=1)
+#   crs-minio              -> Cloudflare R2       (CRS_S3_* env, S3-compatible)
+#   crs-presidio-analyzer  -> Modal               (deploy/modal_presidio.py)
+#   crs-presidio-anonymizer-> not deployed        (nothing in the code calls it)
+#
+# BGE-M3 is likewise swapped for hosted OpenAI embeddings, because torch does
+# not fit in a free instance. Every one of these is a config flag with the
+# original as its default — nothing is removed, and the full stack is restored
+# by deploying render.yaml instead.
+#
+# To use: Render reads `render.yaml` at the repo root, so either rename this
+# file over it on a deploy branch, or create the two services by hand in the
+# dashboard (there are only two — see docs/deploy_vercel_render.md).
+#
+# SYNTHETIC DATA ONLY. Raw contract text lands in third-party storage here.
+
+previews:
+  generation: off
+
+databases:
+  - name: crs-postgres
+    plan: free            # 1GB, EXPIRES 30 DAYS AFTER CREATION
+    postgresMajorVersion: "16"   # pgvector enabled by migration 0004
+
+services:
+  - type: web
+    name: crs-backend
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    plan: free            # 512MB, spins down after 15 idle minutes
+    healthCheckPath: /health
+    envVars:
+      # --- build: skip torch (8.66GB -> ~1GB). Render exposes env vars as
+      # --- Docker build args, and the Dockerfile reads ARG CRS_EXTRAS.
+      - key: CRS_EXTRAS
+        value: openai
+
+      - key: CRS_DATABASE_URL
+        fromDatabase:
+          name: crs-postgres
+          property: connectionString   # postgres:// — normalized in db.py
+
+      # --- pipeline runs in-process: no worker service on free tier
+      - key: CRS_INLINE_WORKER
+        value: "1"
+
+      # --- object store: Cloudflare R2 (10GB free, S3-compatible)
+      - key: CRS_S3_ENDPOINT_URL
+        sync: false        # https://<account-id>.r2.cloudflarestorage.com
+      - key: CRS_S3_ACCESS_KEY
+        sync: false
+      - key: CRS_S3_SECRET_KEY
+        sync: false
+      - key: CRS_S3_REGION
+        value: auto        # R2 requires the literal "auto"
+      - key: AWS_REQUEST_CHECKSUM_CALCULATION
+        value: when_required   # newer boto3 checksums that R2 rejects
+
+      # --- PII tripwire on Modal (deploy/modal_presidio.py)
+      - key: CRS_PRESIDIO_ANALYZER_URL
+        sync: false        # https://<workspace>--crs-presidio-analyzer-web.modal.run
+
+      # --- embeddings: hosted, 1024-dim to match the existing pgvector column
+      - key: CRS_EMBEDDING_PROVIDER
+        value: openai
+      - key: CRS_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: CRS_EMBEDDING_API_KEY
+        sync: false
+
+      # --- analysis LLM (an API call; no local model, fits free tier fine)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # --- SPA hosted on Vercel, so its origin needs CORS
+      - key: CRS_CORS_ALLOW_ORIGINS
+        sync: false        # https://<project>.vercel.app
+
+      - key: CRS_JWT_SECRET
+        generateValue: true
+      - key: CRS_DEMO_PASSWORD
+        sync: false
+      - key: CRS_ENVIRONMENT
+        value: render-free

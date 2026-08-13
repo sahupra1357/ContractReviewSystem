@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,10 +12,35 @@ from backend.api.pii import router as pii_router
 from backend.api.review import router as review_router
 from backend.config import get_settings
 
-app = FastAPI(title="Contract Review Co-Pilot", version="0.1.0")
-app.add_middleware(  # React dev server (vite) during local development
+DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def allowed_origins() -> list[str]:
+    """Vite dev origins plus any configured via CRS_CORS_ALLOW_ORIGINS.
+
+    An explicit allowlist, never "*": the SPA sends a Bearer token, so a
+    wildcard would let any site drive an authenticated reviewer's session.
+    """
+    configured = get_settings().cors_allow_origins
+    extra = [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+    return [*DEV_ORIGINS, *extra]
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Hosts without a worker tier run the same pipeline loop in-process
+    # (CRS_INLINE_WORKER=1). Off by default: compose and AWS run a real worker.
+    if get_settings().inline_worker:
+        from backend.worker import start_inline
+
+        start_inline()
+    yield
+
+
+app = FastAPI(title="Contract Review Co-Pilot", version="0.1.0", lifespan=lifespan)
+app.add_middleware(  # vite dev server locally; CRS_CORS_ALLOW_ORIGINS when split-hosted
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allowed_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

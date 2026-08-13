@@ -23,7 +23,10 @@ COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 # .[ml] pulls sentence-transformers/torch for BGE-M3 embeddings + reranker.
 # Model weights (~2.3GB) download on first use into the hfcache volume.
-RUN uv pip install --system ".[ml]"
+# CRS_EXTRAS overrides this for hosts too small for torch (e.g. the free-tier
+# demo builds with CRS_EXTRAS=openai → ~1GB image, hosted embeddings instead).
+ARG CRS_EXTRAS=ml
+RUN uv pip install --system ".[${CRS_EXTRAS}]"
 
 COPY --from=ui /ui/dist /app/static
 ENV CRS_STATIC_DIR=/app/static

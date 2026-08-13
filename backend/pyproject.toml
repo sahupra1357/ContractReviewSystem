@@ -31,6 +31,11 @@ dependencies = [
 ml = [
     "sentence-transformers>=5.6.0",
 ]
+# Hosted embeddings (CRS_EMBEDDING_PROVIDER=openai) for deployment targets that
+# cannot fit torch — pure-python, ~1MB, vs ~8GB for the ml extra.
+openai = [
+    "openai>=1.0",
+]
 # OCR fallback engines (design §3.2). Heavyweight (torch/paddle); NOT in the
 # default image — Tesseract ships by default and the adapters lazy-import
 # these, skipping gracefully when absent. Install where the chain is exercised

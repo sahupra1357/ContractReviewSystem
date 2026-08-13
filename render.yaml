@@ -5,7 +5,8 @@
 # in-VPC AWS architecture (docs/03_design_document.md §7).
 #
 # After the first deploy:
-#   1. Set ANTHROPIC_API_KEY and CRS_DEMO_PASSWORD in the dashboard (sync: false).
+#   1. Set ANTHROPIC_API_KEY, CRS_EMBEDDING_API_KEY and CRS_DEMO_PASSWORD in
+#      the dashboard (sync: false).
 #   2. Open a shell on `crs-backend` → `python -m backend.seed_demo`.
 #   3. Verify the internal service hostnames below match the dashboard's
 #      "internal address" for each private service (Render assigns
@@ -49,21 +50,34 @@ services:
         sync: false            # set in dashboard; used by seed_demo
       - key: ANTHROPIC_API_KEY
         sync: false            # set in dashboard; profile mounts don't exist on Render
+      # Hosted embeddings (2026-08-13). Render passes env vars as Docker build
+      # args, so CRS_EXTRAS reaches the Dockerfile's ARG and drops torch:
+      # 8.66GB image -> ~697MB, and the worker needs no model weights or disk.
+      # Reverting to the design's self-hosted default = delete these four keys,
+      # restore the worker's hf-cache disk, and raise its plan back to pro.
+      - key: CRS_EXTRAS
+        value: openai
+      - key: CRS_EMBEDDING_PROVIDER
+        value: openai
+      - key: CRS_EMBEDDING_MODEL
+        value: text-embedding-3-small   # requested at 1024 dims = EMBEDDING_DIM
+      - key: CRS_EMBEDDING_API_KEY
+        sync: false            # set in dashboard
       - key: CRS_ENVIRONMENT
         value: render-demo
 
-  # ---------- pipeline worker (BGE-M3 inference lives here) ----------
+  # ---------- pipeline worker (OCR + hosted embeddings; no local model) ----------
   - type: worker
     name: crs-worker
     runtime: docker
     dockerfilePath: backend/Dockerfile
     dockerContext: .
     dockerCommand: python -m backend.worker
-    plan: pro                  # ~8GB RAM for torch + BGE-M3 CPU inference
-    disk:
-      name: hf-cache
-      mountPath: /root/.cache/huggingface
-      sizeGB: 10               # model weights downloaded once (~2.3GB)
+    # Peak memory is now OCR, not inference: one batch of CRS_OCR_BATCH_SIZE
+    # rasterized pages (default 16). Was `pro` (~8GB) for torch + BGE-M3.
+    plan: standard
+    # No disk: embeddings are an API call, so there are no model weights to
+    # cache. Restore the hf-cache disk alongside CRS_EMBEDDING_PROVIDER=bge-m3.
     envVars: *app_env
 
   # ---------- object store (raw / masked / audit zones) ----------

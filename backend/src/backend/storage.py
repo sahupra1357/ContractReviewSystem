@@ -20,6 +20,7 @@ def _client_and_bucket(bucket: str):
         endpoint_url=settings.s3_endpoint_url,
         aws_access_key_id=settings.s3_access_key,
         aws_secret_access_key=settings.s3_secret_key,
+        region_name=settings.s3_region,
     )
     # idempotent: platforms without the compose minio-init step (e.g. Render)
     # get their buckets on first use

@@ -42,8 +42,6 @@ services:
         fromService: { type: pserv, name: crs-minio, envVarKey: MINIO_ROOT_PASSWORD }
       - key: CRS_PRESIDIO_ANALYZER_URL
         value: http://crs-presidio-analyzer:3000
-      - key: CRS_PRESIDIO_ANONYMIZER_URL
-        value: http://crs-presidio-anonymizer:3000
       - key: CRS_JWT_SECRET
         generateValue: true
       - key: CRS_DEMO_PASSWORD
@@ -105,9 +103,3 @@ services:
     image:
       url: mcr.microsoft.com/presidio-analyzer:latest
     plan: standard             # spaCy NER model needs ~2GB
-  - type: pserv
-    name: crs-presidio-anonymizer
-    runtime: image
-    image:
-      url: mcr.microsoft.com/presidio-anonymizer:latest
-    plan: starter

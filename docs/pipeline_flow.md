@@ -201,7 +201,7 @@ flowchart LR
         WK["Worker<br/>claims jobs from Postgres queue"]
         PG[("Postgres + pgvector :5433<br/>documents, jobs, audit_events,<br/>PII master, embeddings")]
         S3[("MinIO :9000<br/>raw / masked / audit buckets")]
-        PRES["Presidio<br/>analyzer + anonymizer"]
+        PRES["Presidio<br/>analyzer"]
         LLM["LLM adapter<br/>CRS_LLM_PROVIDER"]
     end
 

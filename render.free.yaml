@@ -8,7 +8,9 @@
 #   crs-worker             -> in-process thread   (CRS_INLINE_WORKER=1)
 #   crs-minio              -> Cloudflare R2       (CRS_S3_* env, S3-compatible)
 #   crs-presidio-analyzer  -> Modal               (deploy/modal_presidio.py)
-#   crs-presidio-anonymizer-> not deployed        (nothing in the code calls it)
+#
+# (The Presidio anonymizer was deleted outright in 2026-08-14: nothing ever
+#  called it — the PII master table does all masking.)
 #
 # BGE-M3 is likewise swapped for hosted OpenAI embeddings, because torch does
 # not fit in a free instance. Every one of these is a config flag with the
@@ -64,9 +66,13 @@ services:
       - key: AWS_REQUEST_CHECKSUM_CALCULATION
         value: when_required   # newer boto3 checksums that R2 rejects
 
-      # --- PII tripwire on Modal (deploy/modal_presidio.py)
+      # --- PII tripwire on Modal (deploy/modal_presidio.py), behind proxy auth
       - key: CRS_PRESIDIO_ANALYZER_URL
         sync: false        # https://<workspace>--crs-presidio-analyzer-web.modal.run
+      - key: CRS_PRESIDIO_AUTH_KEY
+        sync: false        # Modal dashboard -> Settings -> Proxy Auth Tokens
+      - key: CRS_PRESIDIO_AUTH_SECRET
+        sync: false
 
       # --- embeddings: hosted, 1024-dim to match the existing pgvector column
       - key: CRS_EMBEDDING_PROVIDER

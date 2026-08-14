@@ -20,7 +20,6 @@ flag whose default is the original:
 | `crs-worker` | thread in the API process | `CRS_INLINE_WORKER=1` | `0` (real worker) |
 | `crs-minio` | Cloudflare R2 | `CRS_S3_*` | MinIO |
 | `crs-presidio-analyzer` | Modal | `CRS_PRESIDIO_ANALYZER_URL` | compose service |
-| `crs-presidio-anonymizer` | not deployed | — | — |
 | BGE-M3 embeddings | OpenAI `text-embedding-3-small` | `CRS_EMBEDDING_PROVIDER=openai` | `bge-m3` |
 
 Nothing was removed. `docker compose up -d` and `render.yaml` behave exactly as
@@ -29,8 +28,8 @@ not setting these flags.
 
 Two supporting facts that make the swaps cheap:
 
-- **The anonymizer was already dead code.** `presidio_anonymizer_url` appears
-  only in `config.py`; nothing calls it. The master table does all masking.
+- **The anonymizer was dead code and has been deleted** (2026-08-14). Nothing
+  ever called it — the master table does all masking.
 - **1024 dimensions.** `EMBEDDING_DIM = 1024` and `text-embedding-3-*` accept a
   `dimensions` argument, so the OpenAI adapter asks for 1024 and the existing
   pgvector column is unchanged — **no migration**. `model_name` is
@@ -88,18 +87,28 @@ modal deploy deploy/modal_presidio.py
 ```
 
 Modal prints a URL like
-`https://<workspace>--crs-presidio-analyzer-web.modal.run`. Verify it speaks the
-API the tripwire expects:
+`https://<workspace>--crs-presidio-analyzer-web.modal.run`.
+
+The endpoint is deployed with `requires_proxy_auth=True`, so create a token at
+**Modal dashboard → Settings → Proxy Auth Tokens** and verify with it:
 
 ```bash
 curl -X POST https://<your-modal-url>/analyze \
   -H 'Content-Type: application/json' \
+  -H 'Modal-Key: wk-...' -H 'Modal-Secret: ws-...' \
   -d '{"text":"Contact Gregory Alvarado at greg@example.com","language":"en"}'
 ```
 
-You should get a JSON array containing `PERSON` and `EMAIL_ADDRESS`. The first
-call after idle takes ~10–30s (cold start loading spaCy) — within the
+You should get a JSON array containing `PERSON` and `EMAIL_ADDRESS`. Without the
+headers you should get a 401 — if an unauthenticated call succeeds, proxy auth
+did not take effect and anyone with the URL can spend your Modal credits.
+
+The first call after idle takes ~10–30s (cold start loading spaCy) — within the
 tripwire's 60s timeout, but expect one slow document.
+
+The backend needs all three values (`CRS_PRESIDIO_ANALYZER_URL`,
+`CRS_PRESIDIO_AUTH_KEY`, `CRS_PRESIDIO_AUTH_SECRET`); both credential halves are
+required or the tripwire sends no headers at all and every call 401s.
 
 > Modal web endpoints are **public by default**. For anything beyond a throwaway
 > demo, add proxy auth.
@@ -139,6 +148,8 @@ CRS_S3_REGION=auto
 AWS_REQUEST_CHECKSUM_CALCULATION=when_required   # see troubleshooting
 
 CRS_PRESIDIO_ANALYZER_URL=https://<your-modal-url>
+CRS_PRESIDIO_AUTH_KEY=wk-...
+CRS_PRESIDIO_AUTH_SECRET=ws-...
 
 CRS_EMBEDDING_PROVIDER=openai
 CRS_EMBEDDING_MODEL=text-embedding-3-small
@@ -204,15 +215,30 @@ curl -s -o /dev/null -D - -X OPTIONS https://<your-service>.onrender.com/auth/lo
 
 ## Step 7 — Seed and smoke-test
 
-Render dashboard → your service → **Shell**:
+**Free instances have no dashboard shell or SSH** (paid tiers only), so seed
+from your own machine against the same database and bucket. Everything the
+seeder needs — `golden_set/`, the DB, R2 — is reachable locally:
 
 ```bash
-python -m backend.seed_demo
+cd backend
+CRS_DATABASE_URL="<EXTERNAL database URL from Render>" \
+CRS_S3_ENDPOINT_URL="https://<ACCOUNT_ID>.r2.cloudflarestorage.com" \
+CRS_S3_ACCESS_KEY=<R2 key> CRS_S3_SECRET_KEY=<R2 secret> CRS_S3_REGION=auto \
+AWS_REQUEST_CHECKSUM_CALCULATION=when_required \
+CRS_DEMO_PASSWORD=<same value you set on Render> \
+uv run python -m backend.seed_demo
 ```
 
-Idempotent; seeds demo users, the **PII master table**, and the 22 synthetic
-contracts. The master table is not optional — without it every document halts
-in `pii_hold`, because it is the only masking authority.
+Use the **External** database URL here, not the Internal one — the internal
+hostname only resolves from inside Render's network.
+
+This writes users, the PII master table, and the 22 contracts into the shared
+database and bucket, and enqueues the jobs. The Render service's in-process
+worker picks them up from there; nothing needs to run locally afterwards.
+
+Idempotent, so re-running is safe. The master table is not optional — without
+it every document halts in `pii_hold`, because it is the only masking
+authority.
 
 Then open the Vercel URL, log in as `reviewer1` with `CRS_DEMO_PASSWORD`, and
 watch documents advance. Documents with *novel* planted PII deliberately stop in

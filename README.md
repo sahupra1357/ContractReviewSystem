@@ -50,7 +50,7 @@ docker compose up -d --build          # Postgres+pgvector, MinIO, Presidio, API,
 | Health check | http://localhost:8000/health |
 | MinIO console | http://localhost:9001 (`minioadmin` / `minioadmin`) |
 | Postgres | `localhost:5433` (5432 is left to a local Homebrew Postgres) |
-| Presidio analyzer / anonymizer | `localhost:5002` / `localhost:5001` |
+| Presidio analyzer | `localhost:5002` |
 
 Migrations run automatically on backend boot (`alembic upgrade head` is the
 container's entrypoint, and a failing migration fails the container).
@@ -249,9 +249,9 @@ use it as the checklist when filling in a hosting dashboard.
 | `CRS_DATABASE_URL` | local Postgres on 5433 | → Aurora PostgreSQL + pgvector |
 | `CRS_S3_ENDPOINT_URL` / `CRS_S3_BUCKET_*` | MinIO, `raw`/`masked`/`audit` | → S3 + KMS |
 | `CRS_S3_REGION` | `us-east-1` | MinIO ignores it; Cloudflare R2 needs `auto` |
-| `CRS_PRESIDIO_*_URL` | local analyzer/anonymizer | detector-only tripwire |
-| `CRS_EMBEDDING_PROVIDER` | `bge-m3` | design default (self-hosted); `openai` for hosts without torch, `hash` for tests |
-| `CRS_EMBEDDING_MODEL` | provider default | `openai` → `text-embedding-3-small`, requested at 1024 dims |
+| `CRS_PRESIDIO_ANALYZER_URL` | local analyzer | detector-only tripwire |
+| `CRS_EMBEDDING_PROVIDER` | `bge-m3` | design default (self-hosted); `bedrock` (Titan, in-VPC) for production; `openai` for hosts without torch; `hash` for tests |
+| `CRS_EMBEDDING_MODEL` | provider default | `openai` → `text-embedding-3-small`; `bedrock` → `amazon.titan-embed-text-v2:0`; both requested at 1024 dims |
 | `CRS_EMBEDDING_API_KEY` / `CRS_EMBEDDING_BASE_URL` | unset | **config only — never hardcoded** |
 | `CRS_INLINE_WORKER` | `0` | `1` runs the pipeline loop inside the API process (hosts with no worker tier) |
 | `CRS_OCR_ENGINE_CHAIN` | `tesseract,paddleocr,easyocr,docling` | ordered cheapest-first |

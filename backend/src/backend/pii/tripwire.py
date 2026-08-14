@@ -56,10 +56,26 @@ def _inside_placeholder(start: int, end: int, text: str) -> bool:
     return any(m.start() <= start and end <= m.end() for m in _PLACEHOLDER.finditer(text))
 
 
+def _auth_headers() -> dict[str, str]:
+    """Proxy-auth headers when the analyzer is hosted behind one.
+
+    Both halves are required: sending one without the other would be rejected
+    anyway, and silently half-authenticating is worse than not trying.
+    """
+    settings = get_settings()
+    if settings.presidio_auth_key and settings.presidio_auth_secret:
+        return {
+            "Modal-Key": settings.presidio_auth_key,
+            "Modal-Secret": settings.presidio_auth_secret,
+        }
+    return {}
+
+
 def _presidio_flags(text: str, analyzer_url: str) -> list[TripwireFlag]:
     response = httpx.post(
         f"{analyzer_url}/analyze",
         json={"text": text, "language": "en"},
+        headers=_auth_headers(),
         timeout=60.0,
     )
     response.raise_for_status()

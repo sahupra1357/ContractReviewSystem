@@ -51,11 +51,6 @@ services:
     ports:
       - "5002:3000"
 
-  presidio-anonymizer:
-    image: mcr.microsoft.com/presidio-anonymizer:latest
-    ports:
-      - "5001:3000"
-
   backend:                        # → API Gateway + Lambda/ECS
     build:
       context: .
@@ -64,7 +59,6 @@ services:
       CRS_DATABASE_URL: postgresql+psycopg://crs:crs@postgres:5432/crs
       CRS_S3_ENDPOINT_URL: http://minio:9000
       CRS_PRESIDIO_ANALYZER_URL: http://presidio-analyzer:3000
-      CRS_PRESIDIO_ANONYMIZER_URL: http://presidio-anonymizer:3000
       CRS_ENVIRONMENT: compose
       CRS_JWT_SECRET: ${CRS_JWT_SECRET:-dev-secret-change-me}
     ports:
@@ -89,7 +83,6 @@ services:
       CRS_DATABASE_URL: postgresql+psycopg://crs:crs@postgres:5432/crs
       CRS_S3_ENDPOINT_URL: http://minio:9000
       CRS_PRESIDIO_ANALYZER_URL: http://presidio-analyzer:3000
-      CRS_PRESIDIO_ANONYMIZER_URL: http://presidio-anonymizer:3000
       CRS_ENVIRONMENT: compose
       CRS_JWT_SECRET: ${CRS_JWT_SECRET:-dev-secret-change-me}
     volumes:

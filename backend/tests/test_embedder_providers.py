@@ -9,6 +9,7 @@ import pytest
 
 from backend.config import get_settings
 from backend.knowledge.embedder import (
+    BedrockEmbedder,
     BgeM3Embedder,
     HashEmbedder,
     OpenAIEmbedder,
@@ -113,6 +114,76 @@ def test_openai_rejects_wrong_width_vectors(monkeypatch):
     # silently storing 1536-dim vectors in a 1024 column must not be possible
     with pytest.raises(ValueError, match="expected"):
         embedder.embed(["alpha"])
+
+
+class _FakeBody:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def read(self):
+        import json
+
+        return json.dumps(self._payload).encode()
+
+
+class _FakeBedrockClient:
+    def __init__(self, dim):
+        self.dim = dim
+        self.calls = []
+
+    def invoke_model(self, *, modelId, body):
+        import json
+
+        self.calls.append({"modelId": modelId, "body": json.loads(body)})
+        return {"body": _FakeBody({"embedding": [0.1] * self.dim})}
+
+
+def test_bedrock_provider_selected_by_config(monkeypatch):
+    monkeypatch.setenv("CRS_EMBEDDING_PROVIDER", "bedrock")
+    embedder = get_embedder()
+    assert isinstance(embedder, BedrockEmbedder)
+    assert embedder.model_name == "bedrock:amazon.titan-embed-text-v2:0"
+
+
+def test_bedrock_requests_column_width_and_normalizes(monkeypatch):
+    monkeypatch.setenv("CRS_EMBEDDING_PROVIDER", "bedrock")
+    embedder = get_embedder()
+    fake = _FakeBedrockClient(EMBEDDING_DIM)
+    monkeypatch.setattr(embedder, "_load", lambda: fake)
+
+    vectors = embedder.embed(["alpha", "beta"])
+
+    assert len(vectors) == 2
+    # Titan has no batch call: one invocation per text, order preserved
+    assert [c["body"]["inputText"] for c in fake.calls] == ["alpha", "beta"]
+    assert fake.calls[0]["body"]["dimensions"] == EMBEDDING_DIM
+    # normalized, so pgvector cosine distance matches the BGE-M3 index's meaning
+    assert fake.calls[0]["body"]["normalize"] is True
+
+
+def test_bedrock_rejects_wrong_width_vectors(monkeypatch):
+    monkeypatch.setenv("CRS_EMBEDDING_PROVIDER", "bedrock")
+    embedder = get_embedder()
+    monkeypatch.setattr(embedder, "_load", lambda: _FakeBedrockClient(512))
+
+    with pytest.raises(ValueError, match="expected"):
+        embedder.embed(["alpha"])
+
+
+def test_bedrock_uses_configured_region(monkeypatch):
+    monkeypatch.setenv("CRS_EMBEDDING_PROVIDER", "bedrock")
+    monkeypatch.setenv("CRS_AWS_REGION", "eu-west-1")
+    assert get_embedder()._region == "eu-west-1"
+
+
+def test_every_provider_has_a_distinct_model_name(monkeypatch):
+    names = set()
+    for provider in ("bge-m3", "openai", "bedrock", "hash"):
+        get_settings.cache_clear()
+        monkeypatch.setenv("CRS_EMBEDDING_PROVIDER", provider)
+        names.add(get_embedder().model_name)
+    # the partition key that stops two providers' vectors being compared
+    assert len(names) == 4
 
 
 def test_openai_empty_input_short_circuits(monkeypatch):

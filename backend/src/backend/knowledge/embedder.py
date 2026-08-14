@@ -7,11 +7,19 @@ test double (also used in CI where torch isn't installed).
 
 OpenAIEmbedder — hosted alternative for deployment targets that cannot fit
 torch in memory (the free-tier demo). It is NOT the design default: it sends
-masked text to a third party, so it stays opt-in via CRS_EMBEDDING_PROVIDER
-and the in-VPC build keeps BGE-M3.
+masked text to a third party, so it stays opt-in via CRS_EMBEDDING_PROVIDER.
+
+BedrockEmbedder — Amazon Titan, for the in-VPC AWS build. Reachable over a
+PrivateLink endpoint, so masked text never leaves the AWS network: it keeps
+the data-residency property that motivated self-hosting, without the RAM and
+model-weight storage BGE-M3 needs. Pairs with the bedrock LLM provider.
+
+All four write 1024-dim vectors, and model_name is provider-qualified so an
+index built with one is never compared against another.
 """
 
 import hashlib
+import json
 import math
 from typing import Protocol
 
@@ -88,6 +96,61 @@ class OpenAIEmbedder:
         return vectors
 
 
+class BedrockEmbedder:
+    """Amazon Titan embeddings via Bedrock — the in-VPC production path.
+
+    Bedrock is reachable over a VPC endpoint (PrivateLink), so masked text
+    stays inside the AWS network instead of crossing the public internet the
+    way a hosted API does — the data-residency property that motivated
+    self-hosting BGE-M3, without operating a model server. Credentials come
+    from the standard AWS chain (task role in production), never config.
+
+    Titan v2 accepts a `dimensions` argument, so 1024 keeps the existing
+    pgvector column and needs no migration.
+    """
+
+    DEFAULT_MODEL = "amazon.titan-embed-text-v2:0"
+
+    def __init__(self) -> None:
+        settings = get_settings()
+        self._model_id = settings.embedding_model or self.DEFAULT_MODEL
+        self._region = settings.aws_region
+        self._client = None
+        self.model_name = f"bedrock:{self._model_id}"
+
+    def _load(self):
+        if self._client is None:
+            import boto3
+
+            self._client = boto3.client("bedrock-runtime", region_name=self._region)
+        return self._client
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        client = self._load()
+        vectors = []
+        # Titan has no batch embedding call — one invocation per text. Chunk
+        # counts are small per document, so this stays well inside the SLA.
+        for text in texts:
+            response = client.invoke_model(
+                modelId=self._model_id,
+                body=json.dumps(
+                    # normalize matches BGE-M3's normalize_embeddings=True, so
+                    # cosine distance in pgvector means the same thing either way
+                    {"inputText": text, "dimensions": EMBEDDING_DIM, "normalize": True}
+                ),
+            )
+            vector = json.loads(response["body"].read())["embedding"]
+            if len(vector) != EMBEDDING_DIM:
+                raise ValueError(
+                    f"{self._model_id} returned {len(vector)}-dim vectors, expected "
+                    f"{EMBEDDING_DIM}; pick a model supporting the `dimensions` argument"
+                )
+            vectors.append(vector)
+        return vectors
+
+
 class HashEmbedder:
     """Deterministic pseudo-embeddings: identical text → identical vector,
     token overlap → similar vectors. Good enough to test caching, storage,
@@ -110,6 +173,7 @@ class HashEmbedder:
 _PROVIDERS = {
     "bge-m3": BgeM3Embedder,
     "openai": OpenAIEmbedder,
+    "bedrock": BedrockEmbedder,
     "hash": HashEmbedder,   # tests and smoke runs only — not a quality option
 }
 

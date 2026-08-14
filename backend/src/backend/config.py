@@ -17,7 +17,12 @@ class Settings(BaseSettings):
     s3_bucket_masked: str = "masked"
     s3_bucket_audit: str = "audit"
     presidio_analyzer_url: str = "http://localhost:5002"
-    presidio_anonymizer_url: str = "http://localhost:5001"
+    # Credentials for an analyzer behind proxy auth (Modal proxy-auth tokens,
+    # sent as Modal-Key / Modal-Secret). Unset in compose and in-VPC builds,
+    # where the analyzer is already inside the network perimeter. Both must be
+    # set for headers to be sent.
+    presidio_auth_key: str | None = None
+    presidio_auth_secret: str | None = None
     # OCR confidence-gated engine chain (design §3.2). Ordered cheapest-first;
     # a page below the threshold retries the next engine, best result wins.
     # Engines whose library isn't installed are skipped (see the `ocr` extra).

@@ -14,7 +14,7 @@ demo infrastructure; the real system runs inside our VPC").
 | `crs-worker` | worker (Docker, standard) | pipeline; hosted embeddings, so no local model and no disk |
 | `crs-postgres` | managed Postgres 16 | pgvector enabled by migration 0004 |
 | `crs-minio` | private service + 10GB disk | raw/masked/audit zones (buckets auto-created by the app) |
-| `crs-presidio-analyzer` / `-anonymizer` | private services | the PII tripwire |
+| `crs-presidio-analyzer` | private service | the PII tripwire |
 
 **Embeddings are hosted** here (`CRS_EMBEDDING_PROVIDER=openai`, 2026-08-13),
 not the design's self-hosted BGE-M3. That removes torch from the image
@@ -45,7 +45,7 @@ sessions.
 4. **Verify internal hostnames** (one-time): open each private service in the
    dashboard and confirm its internal address matches the URLs in the
    blueprint env vars (`crs-minio:9000`, `crs-presidio-analyzer:3000`,
-   `crs-presidio-anonymizer:3000`); correct the env vars if Render assigned
+   ); correct the env vars if Render assigned
    different names/ports, then redeploy.
 5. Seed the demo: dashboard → `crs-backend` → **Shell** →
    ```bash

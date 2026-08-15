@@ -17,6 +17,12 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from backend import jobs
 from backend.analysis.models import Analysis
+from backend.analysis.reference_templates import FAMILIES
+from backend.analysis.template_diff import (
+    DEVIATION_THRESHOLD,
+    STANDARD_THRESHOLD,
+    compare_to_template,
+)
 from backend.audit import ActorType, AuditEvent, record_event
 from backend.auth import CurrentActor, ReviewerActor
 from backend.db import Base, get_db
@@ -92,6 +98,41 @@ def review_queue(
     return items
 
 
+def _reference_template(
+    analysis: Analysis | None, masked: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The standard template the analysis was measured against, clause by
+    clause (design §3.5). Recomputed from the masked artifact rather than
+    stored: the diff is deterministic, and showing the live template makes
+    a later template revision visible instead of silently stale."""
+    if analysis is None or analysis.family is None or masked is None:
+        return None
+    template = FAMILIES.get(analysis.family)
+    if template is None:          # family retired since the analysis ran
+        return None
+    clauses = compare_to_template(
+        analysis.family, masked["sections"], masked["masked_text"]
+    )
+    return {
+        "family": analysis.family,
+        "title": template["title"],
+        "family_score": analysis.family_score,
+        "thresholds": {
+            "standard": STANDARD_THRESHOLD,
+            "deviation": DEVIATION_THRESHOLD,
+        },
+        "clauses": [
+            {
+                "heading": c.heading, "template_text": c.template_text,
+                "status": c.status, "similarity": c.similarity,
+                "section_id": c.section_id, "doc_heading": c.doc_heading,
+                "sent_to_llm": c.sent_to_llm,
+            }
+            for c in clauses
+        ],
+    }
+
+
 @router.get("/contracts/{document_id}")
 def contract_detail(
     document_id: str,
@@ -124,6 +165,7 @@ def contract_detail(
         .order_by(Decision.created_at)
     ).scalars())
     return {
+        "reference_template": _reference_template(analysis, masked),
         "document": {
             "id": doc.id, "filename": doc.filename, "status": doc.status,
             "uploaded_by": doc.uploaded_by,

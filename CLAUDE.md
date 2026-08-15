@@ -65,7 +65,21 @@ script in `docs/demo_script.md`. Auth: JWT via `/auth/login` (seed:
 seam in `backend/auth.py`). Review API under `/review/*` — the decision
 endpoint is the ONLY path to approved/rejected (reviewer role + rationale
 mandatory; pipeline can never touch terminal decisions). React SPA served
-at :8000 from the backend image. LLM: containers use the direct API with
+at :8000 from the backend image (host port 8001 in compose); the contract
+page is a three-pane review reading left to right: **reference template** |
+masked contract | review brief. The left pane answers "compared against
+what" — it serves
+`reference_template` from `/review/contracts/{id}` (`_reference_template` →
+`template_diff.compare_to_template`, recomputed from the masked artifact per
+request, no new table) — every standard clause in template order with its
+status (standard/borderline/deviation/missing/extra), similarity, and whether
+it reached the STRONG model. **Per-contract verdicts render on the contract
+pane only** (chip + similarity + "sent to the model"); the template pane stays
+the unannotated source of truth, its sole exception being a `not in this
+contract` marker on omitted clauses, which have no contract clause to sit on.
+Clicking a clause in either pane highlights its counterpart; a
+`template:<family>:<heading>` citation jumps to the standard wording that is
+absent. LLM: containers use the direct API with
 the read-only `ant` profile mount; host-side runs may set
 `CRS_LLM_BASE_URL=http://127.0.0.1:8787` (loopback proxy). Do NOT set
 empty `ANTHROPIC_*` env vars — empty-but-set shadows the profile. Pipeline: upload → dedup/registry →

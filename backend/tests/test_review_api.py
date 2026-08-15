@@ -7,6 +7,7 @@ import json
 
 from sqlalchemy import select
 
+from backend.analysis.reference_templates import LEASE_V1
 from backend.api.review import Decision
 from backend.audit import AuditEvent
 from backend.auth import get_actor
@@ -45,6 +46,44 @@ def _analyzed_document(session, storage, masked_storage) -> str:
     ))
     session.commit()
     return doc.id
+
+
+def test_contract_detail_serves_the_reference_template(session, storage, masked_storage):
+    """The reviewer must be able to see WHAT the contract was compared
+    against, not just the verdict — every standard clause, in template order,
+    with its status."""
+    doc_id = _analyzed_document(session, storage, masked_storage)
+    client = make_client(session, masked_storage)
+
+    body = client.get(f"/review/contracts/{doc_id}").json()
+    template = body["reference_template"]
+
+    assert template["family"] == "lease-v1"
+    assert template["title"] == "RESIDENTIAL LEASE AGREEMENT"
+    assert template["thresholds"] == {"standard": 0.85, "deviation": 0.70}
+    headings = [c["heading"] for c in template["clauses"]]
+    assert headings == [h for h, _ in LEASE_V1["sections"]]
+    # the fixture's masked artifact has no sections, so nothing matched
+    assert {c["status"] for c in template["clauses"]} == {"missing"}
+    assert all(c["template_text"] for c in template["clauses"])
+
+
+def test_contract_detail_has_no_template_without_an_analysis(
+    session, storage, masked_storage,
+):
+    """Family-undetermined documents go to full manual review — inventing a
+    baseline for them would misrepresent what the pipeline actually did."""
+    from backend.ingestion.core import ingest_document
+
+    result = ingest_document(
+        session, storage, source="upload", filename="scan.txt",
+        data=b"illegible\n", actor_id="reviewer-1",
+    )
+    session.commit()
+    client = make_client(session, masked_storage)
+
+    body = client.get(f"/review/contracts/{result.document_id}").json()
+    assert body["reference_template"] is None
 
 
 def test_queue_lists_analyzed_documents(session, storage, masked_storage):

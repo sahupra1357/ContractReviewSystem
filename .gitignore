@@ -22,3 +22,6 @@ project_document/*
 
 # OS
 .DS_Store
+
+.env.render
+.gstack/

@@ -91,6 +91,27 @@ export interface Finding {
   description: string;
 }
 
+export type ClauseStatus =
+  | "standard" | "borderline" | "deviation" | "missing" | "extra";
+
+export interface TemplateClause {
+  heading: string;
+  template_text: string;
+  status: ClauseStatus;
+  similarity: number | null;
+  section_id: string | null;
+  doc_heading: string | null;
+  sent_to_llm: boolean;
+}
+
+export interface ReferenceTemplate {
+  family: string;
+  title: string;
+  family_score: number;
+  thresholds: { standard: number; deviation: number };
+  clauses: TemplateClause[];
+}
+
 export interface ContractDetail {
   document: {
     id: string;
@@ -102,6 +123,7 @@ export interface ContractDetail {
   masked_text: string | null;
   sections: { section_id: string; heading: string; start: number; end: number }[];
   chunks: { chunk_id: string; section_id: string; heading: string; start: number; end: number }[];
+  reference_template: ReferenceTemplate | null;
   analysis: {
     family: string | null;
     findings: Finding[];

@@ -5,7 +5,11 @@ from sqlalchemy import select
 import backend.worker as worker
 from backend.analysis.models import Analysis
 from backend.analysis.reference_templates import LEASE_V1
-from backend.analysis.template_diff import detect_family, diff_against_family
+from backend.analysis.template_diff import (
+    compare_to_template,
+    detect_family,
+    diff_against_family,
+)
 from backend.knowledge.embedder import HashEmbedder
 from backend.llm.base import LLMResponse
 from backend.models import Document
@@ -67,6 +71,61 @@ def test_diff_flags_planted_deviation_and_missing_clause():
     missing = {m.heading for m in diff.missing}
     assert missing == {"7. INSURANCE"}
     assert diff.missing[0].template_ref == "template:lease-v1:7. INSURANCE"
+
+
+def test_compare_to_template_is_ordered_by_template_and_marks_every_clause():
+    """The reviewer-facing baseline: one row per standard clause, in template
+    order, so the UI can show what the contract was measured against."""
+    text = _lease_text(
+        replace_heading="8. LIABILITY",
+        replacement="Landlord's liability is unlimited and Tenant waives no claims.",
+        drop_heading="7. INSURANCE",
+    )
+    clauses = compare_to_template("lease-v1", _sections_for(text), text)
+
+    template_headings = [h for h, _ in LEASE_V1["sections"]]
+    assert [c.heading for c in clauses] == template_headings
+
+    by_heading = {c.heading: c for c in clauses}
+    assert by_heading["8. LIABILITY"].status == "deviation"
+    assert by_heading["8. LIABILITY"].similarity < 0.70
+    assert by_heading["8. LIABILITY"].section_id is not None
+
+    insurance = by_heading["7. INSURANCE"]
+    assert insurance.status == "missing"
+    assert insurance.similarity is None and insurance.section_id is None
+    # the reviewer still sees the wording that is absent
+    assert "renter's insurance" in insurance.template_text
+
+    assert by_heading["4. RENT"].status == "standard"
+    assert by_heading["4. RENT"].similarity >= 0.85
+
+
+def test_compare_to_template_sent_to_llm_matches_what_the_prompt_carries():
+    """`sent_to_llm` is the cost story in the demo — it must agree with the
+    prompt builder, not just look plausible."""
+    from backend.analysis.prompts import build_brief_prompt
+
+    text = _lease_text(
+        replace_heading="8. LIABILITY",
+        replacement="Landlord's liability is unlimited and Tenant waives no claims.",
+        drop_heading="7. INSURANCE",
+    )
+    sections = _sections_for(text)
+    prompt = build_brief_prompt(diff_against_family("lease-v1", sections, text), {})
+
+    for clause in compare_to_template("lease-v1", sections, text):
+        body_in_prompt = clause.template_text and clause.template_text in prompt
+        assert bool(body_in_prompt) is clause.sent_to_llm, clause.heading
+
+
+def test_compare_to_template_flags_a_section_with_no_counterpart():
+    text = _lease_text() + "\n12. ARBITRATION\nAll disputes go to binding arbitration.\n"
+    clauses = compare_to_template("lease-v1", _sections_for(text), text)
+
+    extra = [c for c in clauses if c.status == "extra"]
+    assert [c.heading for c in extra] == ["12. ARBITRATION"]
+    assert extra[0].template_text == "" and extra[0].sent_to_llm
 
 
 class FakeLLM:

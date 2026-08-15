@@ -73,6 +73,9 @@ class SectionDiff:
     doc_text: str
     template_text: str
     similarity: float
+    # canonical heading of the template clause this matched ("" for extras) —
+    # the doc's own heading may be an OCR-fuzzy variant of it
+    template_heading: str = ""
 
 
 @dataclass
@@ -138,6 +141,7 @@ def diff_against_family(
         diff = SectionDiff(
             section_id=section["section_id"], heading=section["heading"],
             doc_text=doc_text, template_text=body, similarity=similarity,
+            template_heading=heading,
         )
         if similarity >= STANDARD_THRESHOLD:
             result.standard.append(diff)
@@ -153,3 +157,62 @@ def diff_against_family(
                 heading=heading, template_text=body,
             ))
     return result
+
+
+@dataclass
+class ClauseComparison:
+    """One template clause aligned with the contract's version of it — the
+    reviewer-facing projection of `DiffResult` (design §3.5). Ordered by
+    template, so the UI can show the baseline the analysis was measured
+    against, clause by clause."""
+
+    heading: str                  # canonical template heading
+    template_text: str            # the standard wording ("" for extras)
+    status: str                   # standard|borderline|deviation|missing|extra
+    similarity: float | None      # None when there is nothing to compare
+    section_id: str | None        # contract section, None when missing
+    doc_heading: str | None       # heading as it appears in the contract
+    sent_to_llm: bool             # did this clause reach the STRONG model?
+
+
+def compare_to_template(
+    family: str, sections: list[dict], masked_text: str
+) -> list[ClauseComparison]:
+    """Template-ordered comparison for display. Recomputed from the masked
+    artifact on demand — deterministic and cheap (no LLM, no I/O)."""
+    diff = diff_against_family(family, sections, masked_text)
+    matched: dict[str, tuple[str, SectionDiff]] = {}
+    for status, bucket in (
+        ("standard", diff.standard),
+        ("borderline", diff.borderline),
+        ("deviation", diff.deviations),
+    ):
+        for section_diff in bucket:
+            matched[section_diff.template_heading] = (status, section_diff)
+    reported_missing = {m.heading for m in diff.missing}
+
+    out: list[ClauseComparison] = []
+    for heading, body in FAMILIES[family]["sections"]:
+        entry = matched.get(heading)
+        if entry is None:
+            out.append(ClauseComparison(
+                heading=heading, template_text=body, status="missing",
+                similarity=None, section_id=None, doc_heading=None,
+                sent_to_llm=heading in reported_missing,
+            ))
+            continue
+        status, section_diff = entry
+        out.append(ClauseComparison(
+            heading=heading, template_text=body, status=status,
+            similarity=section_diff.similarity,
+            section_id=section_diff.section_id,
+            doc_heading=section_diff.heading,
+            sent_to_llm=status != "standard",
+        ))
+    for extra in diff.extra:
+        out.append(ClauseComparison(
+            heading=extra.heading, template_text="", status="extra",
+            similarity=None, section_id=extra.section_id,
+            doc_heading=extra.heading, sent_to_llm=True,
+        ))
+    return out
